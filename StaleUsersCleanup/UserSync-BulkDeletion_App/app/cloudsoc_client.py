@@ -25,12 +25,22 @@ class RateLimiter:
     Supports a Try-Now interrupt so the UI can override an active backoff wait.
     Also exposes live telemetry: total_calls_session, hourly_quota_remaining, total_429_count.
     """
-    def __init__(self, max_per_second: float = 2.5, max_per_hour: int = 10000):
+    def __init__(self, max_per_second: float = 2.5, max_per_hour: int = 10000, db_path: Optional[str] = None):
         self.min_interval = 1.0 / max_per_second if max_per_second > 0 else 0.4
         self.max_per_hour = max_per_hour
+        self.db_path = db_path
         self.last_call_time = 0.0
         self.call_timestamps: List[float] = []
         self._lock = threading.Lock()
+
+        # Load persisted timestamps from DB if available
+        if self.db_path:
+            try:
+                from app.database import get_recent_api_timestamps, get_total_429_count_db
+                one_hour_ago = time.time() - 3600.0
+                self.call_timestamps = get_recent_api_timestamps(one_hour_ago, db_path=self.db_path)
+            except Exception:
+                self.call_timestamps = []
 
         # Backoff interrupt support
         self._backoff_event = threading.Event()
@@ -39,10 +49,25 @@ class RateLimiter:
         self.backoff_until: float = 0.0
 
         # Live telemetry counters
-        self.total_calls_session: int = 0
+        self.total_calls_session: int = len(self.call_timestamps)
         self.total_429_count: int = 0
-        self.total_retries: int = 0
-        self.calls_last_hour: int = 0
+        if self.db_path:
+            try:
+                from app.database import get_total_429_count_db
+                self.total_429_count = get_total_429_count_db(db_path=self.db_path)
+            except Exception:
+                pass
+        self.total_retries: int = self.total_429_count
+        self.calls_last_hour: int = len(self.call_timestamps)
+
+    def record_call(self, method: str = "", endpoint: str = "", status_code: int = 200, is_429: bool = False) -> None:
+        """Persist outgoing call to SQLite if db_path is configured."""
+        if self.db_path:
+            try:
+                from app.database import record_api_call_db
+                record_api_call_db(time.time(), method, endpoint, status_code, is_429, db_path=self.db_path)
+            except Exception:
+                pass
 
     def acquire(self) -> float:
         """Block until a call slot is available; respects rate limits and hourly budget."""
@@ -144,7 +169,9 @@ class CloudsocClient:
         hourly_call_limit: int = 10000,
         max_retries: int = 5,
         base_backoff_seconds: int = 15,
-        logger_func=None
+        logger_func=None,
+        rate_limiter: Optional[RateLimiter] = None,
+        db_path: Optional[str] = None
     ):
         self.api_server = api_server.rstrip("/")
         self.tenant = tenant.strip("/")
@@ -153,7 +180,7 @@ class CloudsocClient:
         self.max_retries = max_retries
         self.base_backoff_seconds = base_backoff_seconds
         self.logger = logger_func or (lambda lvl, msg: None)
-        self.rate_limiter = RateLimiter(rate_limit_per_second, hourly_call_limit)
+        self.rate_limiter = rate_limiter or RateLimiter(rate_limit_per_second, hourly_call_limit, db_path=db_path)
 
         # Auth expiry tracking
         self._auth_failed_count: int = 0
@@ -264,6 +291,7 @@ class CloudsocClient:
             try:
                 with urllib.request.urlopen(req, context=self.ssl_context, timeout=30) as resp:
                     status_code = resp.status
+                    self.rate_limiter.record_call(method=method, endpoint=endpoint_or_url, status_code=status_code)
                     body = resp.read().decode("utf-8")
                     if status_code in (200, 201, 202, 204):
                         self._auth_failed_count = 0
@@ -277,6 +305,7 @@ class CloudsocClient:
 
             except urllib.error.HTTPError as e:
                 status_code = e.code
+                self.rate_limiter.record_call(method=method, endpoint=endpoint_or_url, status_code=status_code, is_429=(status_code == 429))
                 error_body = ""
                 try:
                     error_body = e.read().decode("utf-8")
@@ -396,3 +425,23 @@ class CloudsocClient:
     def create_user(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """POST user."""
         return self.request("POST", "api/admin/v1/user_management/", json_data=payload)
+
+
+# ---------------------------------------------------------------------------
+# Global Shared Rate Limiter & Client Provider
+# ---------------------------------------------------------------------------
+_GLOBAL_RATE_LIMITER: Optional[RateLimiter] = None
+_GLOBAL_RATE_LIMITER_LOCK = threading.Lock()
+
+
+def get_global_rate_limiter(max_per_second: float = 2.5, max_per_hour: int = 10000, db_path: Optional[str] = None) -> RateLimiter:
+    """Retrieve or initialize the global shared RateLimiter across all app subsystems."""
+    global _GLOBAL_RATE_LIMITER
+    with _GLOBAL_RATE_LIMITER_LOCK:
+        if _GLOBAL_RATE_LIMITER is None:
+            _GLOBAL_RATE_LIMITER = RateLimiter(max_per_second, max_per_hour, db_path=db_path)
+        else:
+            if db_path and not _GLOBAL_RATE_LIMITER.db_path:
+                _GLOBAL_RATE_LIMITER.db_path = db_path
+        return _GLOBAL_RATE_LIMITER
+

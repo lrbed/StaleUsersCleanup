@@ -281,11 +281,19 @@ def run_preflight():
 
         if cloudsoc_status["dns_resolved"]:
             try:
+                from app.cloudsoc_client import get_global_rate_limiter
+                shared_limiter = get_global_rate_limiter(
+                    max_per_second=float(cfg.get("rate_limit_per_second", 2.5)),
+                    max_per_hour=int(cfg.get("hourly_call_limit", 10000)),
+                    db_path=DEFAULT_DB_PATH
+                )
                 client = CloudsocClient(
                     api_server=cfg["api_server"],
                     tenant=cfg["tenant"],
                     key_id=cfg["key_id"],
-                    key_secret=cfg.get("key_secret", "")
+                    key_secret=cfg.get("key_secret", ""),
+                    rate_limiter=shared_limiter,
+                    db_path=DEFAULT_DB_PATH
                 )
                 auth_res = client.test_connection()
                 cloudsoc_status["auth_valid"] = True
@@ -548,23 +556,15 @@ def execution_reauth():
 # -------------------------------------------------------------
 @app.route("/api/telemetry", methods=["GET"])
 def get_telemetry():
-    """Live rate limiting and API telemetry counters."""
-    if execution_service.client:
-        return jsonify({"success": True, "telemetry": execution_service.client.get_telemetry()})
+    """Live rate limiting and API telemetry counters from the shared global rate limiter."""
     cfg = load_config(DEFAULT_DB_PATH)
-    return jsonify({
-        "success": True,
-        "telemetry": {
-            "total_calls_session": 0,
-            "calls_last_hour": 0,
-            "hourly_quota_remaining": int(cfg.get("hourly_call_limit", 10000)),
-            "hourly_limit": int(cfg.get("hourly_call_limit", 10000)),
-            "total_429_count": 0,
-            "total_retries": 0,
-            "is_in_backoff": False,
-            "backoff_seconds_remaining": 0.0
-        }
-    })
+    from app.cloudsoc_client import get_global_rate_limiter
+    limiter = get_global_rate_limiter(
+        max_per_second=float(cfg.get("rate_limit_per_second", 2.5)),
+        max_per_hour=int(cfg.get("hourly_call_limit", 10000)),
+        db_path=DEFAULT_DB_PATH
+    )
+    return jsonify({"success": True, "telemetry": limiter.get_telemetry()})
 
 
 @app.route("/api/telemetry/override-backoff", methods=["POST"])

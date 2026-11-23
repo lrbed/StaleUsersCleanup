@@ -127,6 +127,13 @@ class ExecutionService:
             def log_cb(lvl, msg):
                 add_log(lvl, msg, run_id=self.current_run_id, db_path=self.db_path)
 
+            from app.cloudsoc_client import get_global_rate_limiter
+            shared_limiter = get_global_rate_limiter(
+                max_per_second=float(cfg.get("rate_limit_per_second", 2.5)),
+                max_per_hour=int(cfg.get("hourly_call_limit", 10000)),
+                db_path=self.db_path
+            )
+
             self.client = CloudsocClient(
                 api_server=cfg["api_server"],
                 tenant=cfg["tenant"],
@@ -136,7 +143,9 @@ class ExecutionService:
                 hourly_call_limit=int(cfg.get("hourly_call_limit", 10000)),
                 max_retries=int(cfg.get("max_retries", 5)),
                 base_backoff_seconds=int(cfg.get("base_backoff_seconds", 15)),
-                logger_func=log_cb
+                logger_func=log_cb,
+                rate_limiter=shared_limiter,
+                db_path=self.db_path
             )
 
             self._thread = threading.Thread(
@@ -183,6 +192,13 @@ class ExecutionService:
             def log_cb(lvl, msg):
                 add_log(lvl, msg, run_id=self.current_run_id, db_path=self.db_path)
 
+            from app.cloudsoc_client import get_global_rate_limiter
+            shared_limiter = get_global_rate_limiter(
+                max_per_second=float(cfg.get("rate_limit_per_second", 2.5)),
+                max_per_hour=int(cfg.get("hourly_call_limit", 10000)),
+                db_path=self.db_path
+            )
+
             self.client = CloudsocClient(
                 api_server=cfg["api_server"],
                 tenant=cfg["tenant"],
@@ -192,7 +208,9 @@ class ExecutionService:
                 hourly_call_limit=int(cfg.get("hourly_call_limit", 10000)),
                 max_retries=int(cfg.get("max_retries", 5)),
                 base_backoff_seconds=int(cfg.get("base_backoff_seconds", 15)),
-                logger_func=log_cb
+                logger_func=log_cb,
+                rate_limiter=shared_limiter,
+                db_path=self.db_path
             )
 
             self._thread = threading.Thread(
@@ -638,11 +656,19 @@ class ExecutionService:
             user = dict(user)
 
         cfg = load_config(self.db_path)
+        from app.cloudsoc_client import get_global_rate_limiter
+        shared_limiter = get_global_rate_limiter(
+            max_per_second=float(cfg.get("rate_limit_per_second", 2.5)),
+            max_per_hour=int(cfg.get("hourly_call_limit", 10000)),
+            db_path=self.db_path
+        )
         client = CloudsocClient(
             api_server=cfg["api_server"],
             tenant=cfg["tenant"],
             key_id=cfg["key_id"],
-            key_secret=cfg.get("key_secret", "")
+            key_secret=cfg.get("key_secret", ""),
+            rate_limiter=shared_limiter,
+            db_path=self.db_path
         )
 
         uuid = user.get("cloudsoc_id")

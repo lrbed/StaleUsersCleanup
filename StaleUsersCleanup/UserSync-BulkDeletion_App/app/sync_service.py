@@ -248,6 +248,12 @@ class SyncService:
                 count_limit = None
 
         try:
+            from app.cloudsoc_client import get_global_rate_limiter
+            shared_limiter = get_global_rate_limiter(
+                max_per_second=float(cfg.get("rate_limit_per_second", 2.5)),
+                max_per_hour=int(cfg.get("hourly_call_limit", 10000)),
+                db_path=self.db_path
+            )
             client = CloudsocClient(
                 api_server=cfg["api_server"],
                 tenant=cfg["tenant"],
@@ -257,7 +263,9 @@ class SyncService:
                 hourly_call_limit=int(cfg.get("hourly_call_limit", 10000)),
                 max_retries=int(cfg.get("max_retries", 5)),
                 base_backoff_seconds=int(cfg.get("base_backoff_seconds", 15)),
-                logger_func=log_cb
+                logger_func=log_cb,
+                rate_limiter=shared_limiter,
+                db_path=self.db_path
             )
 
             # Initial call to determine total_count

@@ -158,6 +158,20 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
             );
         """)
 
+        # Outgoing API Telemetry table (tracks rolling hourly calls & 429 counts persistently)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_telemetry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL,
+                method TEXT,
+                endpoint TEXT,
+                status_code INTEGER,
+                is_429 INTEGER DEFAULT 0
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_telemetry_timestamp ON api_telemetry(timestamp);")
+
+
         conn.commit()
 
 
@@ -503,5 +517,39 @@ def dismiss_interrupted_run(run_id: int, db_path: str = DEFAULT_DB_PATH) -> bool
         """, (run_id,))
         conn.commit()
         return cursor.rowcount > 0
+
+
+def record_api_call_db(timestamp: float, method: str = "", endpoint: str = "", status_code: int = 200, is_429: bool = False, db_path: str = DEFAULT_DB_PATH) -> None:
+    """Record an outgoing API call timestamp into SQLite for persistent telemetry."""
+    try:
+        with get_db_connection(db_path) as conn:
+            conn.execute("""
+                INSERT INTO api_telemetry (timestamp, method, endpoint, status_code, is_429)
+                VALUES (?, ?, ?, ?, ?)
+            """, (timestamp, method, endpoint, status_code, 1 if is_429 else 0))
+            conn.commit()
+    except Exception:
+        pass
+
+
+def get_recent_api_timestamps(since_timestamp: float, db_path: str = DEFAULT_DB_PATH) -> List[float]:
+    """Retrieve all API call timestamps since the given epoch time."""
+    try:
+        with get_db_connection(db_path) as conn:
+            rows = conn.execute("SELECT timestamp FROM api_telemetry WHERE timestamp > ? ORDER BY timestamp ASC", (since_timestamp,)).fetchall()
+            return [float(r["timestamp"]) for r in rows]
+    except Exception:
+        return []
+
+
+def get_total_429_count_db(db_path: str = DEFAULT_DB_PATH) -> int:
+    """Retrieve all-time or session count of 429 rate limit responses."""
+    try:
+        with get_db_connection(db_path) as conn:
+            res = conn.execute("SELECT COUNT(*) as cnt FROM api_telemetry WHERE is_429 = 1").fetchone()
+            return int(res["cnt"]) if res else 0
+    except Exception:
+        return 0
+
 
 
