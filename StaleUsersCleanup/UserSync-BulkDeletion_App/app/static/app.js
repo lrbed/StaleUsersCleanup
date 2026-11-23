@@ -810,11 +810,57 @@ async function startLdapSync(recheckAll = false) {
         const data = await res.json();
         if (data.success) {
             fetchSyncStatus();
+            // Switch to sync tab or poll automatically
+            startSyncPolling();
         } else {
-            alert("Failed to start LDAP sync: " + (data.error || "Unknown"));
+            alert("Failed to start Active Directory correlation: " + (data.error || "Unknown"));
         }
     } catch (e) {
         alert("Request error: " + e.message);
+    }
+}
+
+function onAdIngestPresetChange() {
+    const preset = document.getElementById("ad-ingest-preset")?.value || "all";
+    const filterInput = document.getElementById("ad-ingest-filter");
+    if (!filterInput) return;
+
+    if (preset === "disabled") {
+        filterInput.value = "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=2))";
+    } else if (preset === "all") {
+        filterInput.value = "";
+    }
+}
+
+async function startAdIngestion() {
+    const filterVal = document.getElementById("ad-ingest-filter")?.value?.trim() || "";
+    const baseDnVal = document.getElementById("ad-ingest-base-dn")?.value?.trim() || "";
+    const limitVal = parseInt(document.getElementById("ad-ingest-limit")?.value?.trim() || "0") || 0;
+
+    const btn = document.getElementById("btn-run-ad-ingest");
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch("/api/sync/ad-ingest/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ldap_filter: filterVal,
+                base_dn: baseDnVal,
+                count_limit: limitVal
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            fetchSyncStatus();
+            startSyncPolling();
+        } else {
+            alert("Failed to start Active Directory Ingestion: " + (data.error || "Unknown"));
+        }
+    } catch (e) {
+        alert("Request error: " + e.message);
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 

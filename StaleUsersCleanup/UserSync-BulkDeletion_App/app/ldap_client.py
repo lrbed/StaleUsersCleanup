@@ -334,3 +334,122 @@ class LDAPSyncEngine:
             "forest": "-",
             "details": "User not found in any Active Directory forest"
         }
+
+    def query_ad_users(
+        self,
+        base_dn: Optional[str] = None,
+        ldap_filter: Optional[str] = None,
+        attributes: Optional[List[str]] = None,
+        size_limit: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Queries Active Directory using an LDAP filter and extracts matching user accounts.
+        Defaults:
+          - base_dn: falls back to self.base_dn (or Preflight configured base_dn)
+          - ldap_filter: falls back to '(&(objectCategory=person)(objectClass=user))'
+          - size_limit: 0 means unlimited (retrieves all matching via paged search)
+        """
+        if not HAS_LDAP3:
+            raise RuntimeError("ldap3 library is not available in the current runtime environment.")
+
+        target_base = (base_dn or "").strip() or self.manual_base_dn
+        if not target_base:
+            raise ValueError("No Base DN specified or configured for Active Directory search.")
+
+        target_filter = (ldap_filter or "").strip()
+        if not target_filter:
+            target_filter = "(&(objectCategory=person)(objectClass=user))"
+
+        target_attrs = attributes or [
+            "mail", "userPrincipalName", "sAMAccountName", "displayName",
+            "userAccountControl", "objectGUID", "whenCreated", "lastLogonTimestamp"
+        ]
+
+        server_host = self.manual_host
+        if not server_host and self.forests:
+            server_host = self.forests[0]
+        if not server_host:
+            raise ValueError("No Active Directory host or forest configured.")
+
+        port = self.manual_port or self.default_port or (636 if self.use_ssl or self.manual_use_ssl else 389)
+        use_ssl = self.use_ssl or self.manual_use_ssl
+        server = Server(server_host, port=port, use_ssl=use_ssl, get_info=ALL, connect_timeout=5)
+
+        if self.username and self.password:
+            conn = Connection(server, user=self.username, password=self.password, authentication=SIMPLE, auto_bind=True)
+        else:
+            conn = Connection(server, auto_bind=True)
+
+        users_found: List[Dict[str, Any]] = []
+
+        try:
+            # If size_limit > 0 and <= 1000, simple search with size_limit
+            # Otherwise use paged search
+            paged_size = 500
+            if 0 < size_limit <= 500:
+                paged_size = size_limit
+
+            entry_generator = conn.extend.standard.paged_search(
+                search_base=target_base,
+                search_filter=target_filter,
+                search_scope=SUBTREE,
+                attributes=target_attrs,
+                paged_size=paged_size,
+                generator=True
+            )
+
+            count = 0
+            for entry in entry_generator:
+                if entry.get("type") != "searchResEntry":
+                    continue
+
+                attrs = entry.get("attributes", {})
+                
+                # Resolve primary email/identifier
+                mail = attrs.get("mail") or ""
+                upn = attrs.get("userPrincipalName") or ""
+                sam = attrs.get("sAMAccountName") or ""
+                name = attrs.get("displayName") or sam or mail or upn
+
+                primary_email = ""
+                if mail and "@" in str(mail):
+                    primary_email = str(mail).strip().lower()
+                elif upn and "@" in str(upn):
+                    primary_email = str(upn).strip().lower()
+                elif sam:
+                    primary_email = f"{str(sam).strip().lower()}@ad.local"
+
+                if not primary_email:
+                    continue
+
+                uac_val = attrs.get("userAccountControl") or 0
+                try:
+                    uac = int(uac_val)
+                except (ValueError, TypeError):
+                    uac = 0
+
+                is_disabled = bool(uac & UF_ACCOUNTDISABLE)
+                ad_status = "DISABLED" if is_disabled else "ACTIVE"
+                guid = str(attrs.get("objectGUID") or "")
+
+                users_found.append({
+                    "email": primary_email,
+                    "name": str(name) if name else primary_email,
+                    "sam_account_name": str(sam),
+                    "upn": str(upn),
+                    "ad_status": ad_status,
+                    "ad_guid": guid,
+                    "ad_uac": uac
+                })
+
+                count += 1
+                if size_limit > 0 and count >= size_limit:
+                    break
+
+        finally:
+            try:
+                conn.unbind()
+            except Exception:
+                pass
+
+        return users_found

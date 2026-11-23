@@ -556,3 +556,136 @@ class SyncService:
         update_execution_checkpoint(run_id, processed_count=imported, success_count=imported, failed_count=errors, status="completed", db_path=self.db_path)
         add_log("INFO", f"CSV Import complete. {imported} users imported, {errors} errors.", run_id=run_id, db_path=self.db_path)
         return {"success": True, "imported": imported, "errors": errors}
+
+    # -------------------------------------------------------------
+    # ACTIVE DIRECTORY INGESTION WORKER
+    # -------------------------------------------------------------
+    def start_ad_ingest(
+        self,
+        ldap_filter: Optional[str] = None,
+        base_dn: Optional[str] = None,
+        count_limit: int = 0
+    ) -> Dict[str, Any]:
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                return {"success": False, "error": "A synchronization task is already in progress"}
+
+            self._cancel_flag = False
+            self._pause_flag = False
+            self.current_mode = "ad_ingest"
+            self.processed_count = 0
+            self.success_count = 0
+            self.failed_count = 0
+            self.total_count = 0
+            self.start_time = time.time()
+            self.current_message = "Initializing Active Directory Ingestion..."
+
+            cfg = load_config(self.db_path)
+            config_snapshot = dict(cfg)
+            config_snapshot["ad_ingest_params"] = {
+                "ldap_filter": ldap_filter,
+                "base_dn": base_dn,
+                "count_limit": count_limit
+            }
+
+            self.current_run_id = create_execution_run(
+                run_mode="ad_ingest",
+                config_snapshot=config_snapshot,
+                db_path=self.db_path
+            )
+
+            self._thread = threading.Thread(
+                target=self._run_ad_ingest,
+                args=(cfg, ldap_filter, base_dn, count_limit),
+                daemon=True
+            )
+            self._thread.start()
+            return {"success": True, "run_id": self.current_run_id}
+
+    def _run_ad_ingest(
+        self,
+        cfg: Dict[str, Any],
+        ldap_filter: Optional[str],
+        base_dn: Optional[str],
+        count_limit: int
+    ):
+        run_id = self.current_run_id
+        effective_filter = (ldap_filter or "").strip() or "(&(objectCategory=person)(objectClass=user))"
+        effective_base = (base_dn or "").strip() or cfg.get("ad_base_dn", "")
+
+        add_log("INFO", f"Starting Active Directory Ingestion (Filter: {effective_filter}, Base DN: {effective_base or 'Default'}, Limit: {count_limit or 'None'})", run_id=run_id, db_path=self.db_path)
+
+        def log_cb(lvl, msg):
+            add_log(lvl, msg, run_id=run_id, db_path=self.db_path)
+
+        try:
+            ldap_engine = LDAPSyncEngine(
+                manual_host=cfg.get("ad_host", ""),
+                manual_port=int(cfg.get("ad_port", 389)),
+                username=cfg.get("ad_username", ""),
+                password=cfg.get("ad_password", ""),
+                manual_base_dn=cfg.get("ad_base_dn", ""),
+                manual_use_ssl=bool(cfg.get("ad_use_ssl", False)),
+                forests=cfg.get("ad_forests", []),
+                logger_func=log_cb
+            )
+
+            self.current_message = "Querying Active Directory via LDAP..."
+            ad_users = ldap_engine.query_ad_users(
+                base_dn=effective_base,
+                ldap_filter=effective_filter,
+                size_limit=count_limit
+            )
+
+            self.total_count = len(ad_users)
+            add_log("INFO", f"Discovered {self.total_count} matching accounts from Active Directory", run_id=run_id, db_path=self.db_path)
+
+            for u in ad_users:
+                if self._cancel_flag:
+                    add_log("WARNING", "Active Directory Ingestion cancelled by administrator", run_id=run_id, db_path=self.db_path)
+                    update_execution_checkpoint(run_id, self.processed_count, self.success_count, self.failed_count, status="interrupted", db_path=self.db_path)
+                    self.current_message = "Cancelled"
+                    return
+
+                while self._pause_flag:
+                    time.sleep(1.0)
+                    if self._cancel_flag:
+                        break
+
+                email = u.get("email")
+                if not email:
+                    continue
+
+                user_dict = {
+                    "email": email,
+                    "name": u.get("name", email),
+                    "secondary_user_id": u.get("sam_account_name", ""),
+                    "ad_status": u.get("ad_status", "Unchecked"),
+                    "ad_checked_at": datetime.now(timezone.utc).isoformat(),
+                    "source": "ad_ingest",
+                    "raw_json": json.dumps(u)
+                }
+
+                try:
+                    upsert_user(user_dict, db_path=self.db_path)
+                    self.success_count += 1
+                except Exception as ex:
+                    self.failed_count += 1
+                    add_log("ERROR", f"Failed to ingest AD user {email}: {str(ex)}", run_id=run_id, user_email=email, db_path=self.db_path)
+
+                self.processed_count += 1
+                self.current_message = f"Ingested {self.processed_count}/{self.total_count}: {email}"
+
+                if self.processed_count % 50 == 0:
+                    update_execution_checkpoint(run_id, self.processed_count, self.success_count, self.failed_count, status="running", db_path=self.db_path)
+
+            update_execution_checkpoint(run_id, self.processed_count, self.success_count, self.failed_count, status="completed", db_path=self.db_path)
+            self.current_message = f"Ingestion Complete. Discovered: {self.total_count}, Ingested: {self.success_count}, Errors: {self.failed_count}"
+            add_log("INFO", self.current_message, run_id=run_id, db_path=self.db_path)
+
+        except Exception as e:
+            err = str(e)
+            self.failed_count += 1
+            self.current_message = f"Fatal Error: {err}"
+            add_log("ERROR", f"Active Directory Ingestion failed: {err}", run_id=run_id, db_path=self.db_path)
+            update_execution_checkpoint(run_id, self.processed_count, self.success_count, self.failed_count, status="failed", db_path=self.db_path)

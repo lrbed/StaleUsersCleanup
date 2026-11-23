@@ -23,6 +23,7 @@ from app.ldap_client import LDAPSyncEngine
 from app.sync_service import matches_criteria
 from app.execution_service import ExecutionService
 from app.main import app
+import app.main as main_module
 
 
 class TestEnterpriseEnhancements(unittest.TestCase):
@@ -281,6 +282,72 @@ class TestEnterpriseEnhancements(unittest.TestCase):
             self.assertIn("Cloudsoc_PowerAdmins", groups)
             self.assertIn("Security Ops", groups)
 
+
+
+    # -----------------------------------------------------------------
+    # 6. ACTIVE DIRECTORY INGESTION & DEFAULTS
+    # -----------------------------------------------------------------
+    @patch("app.ldap_client.HAS_LDAP3", True)
+    @patch("app.ldap_client.Server")
+    @patch("app.ldap_client.Connection")
+    def test_ad_user_ingestion_defaults_and_endpoint(self, mock_conn_cls, mock_server_cls):
+        # Setup mock LDAP connection and generator
+        mock_conn = MagicMock()
+        mock_conn_cls.return_value = mock_conn
+
+        mock_entries = [
+            {
+                "type": "searchResEntry",
+                "attributes": {
+                    "mail": "john.doe@company.com",
+                    "displayName": "John Doe",
+                    "sAMAccountName": "jdoe",
+                    "userAccountControl": 512,  # Active
+                    "objectGUID": "1234-guid"
+                }
+            },
+            {
+                "type": "searchResEntry",
+                "attributes": {
+                    "userPrincipalName": "disabled.user@company.com",
+                    "displayName": "Disabled User",
+                    "sAMAccountName": "duser",
+                    "userAccountControl": 514,  # 512 | 2 = ACCOUNTDISABLE
+                    "objectGUID": "5678-guid"
+                }
+            }
+        ]
+        mock_conn.extend.standard.paged_search.return_value = iter(mock_entries)
+
+        # 1. Test query_ad_users directly with empty parameters (defaults)
+        engine = LDAPSyncEngine(
+            manual_host="127.0.0.1",
+            manual_base_dn="DC=corp,DC=local",
+            forests=["corp.local"]
+        )
+        users = engine.query_ad_users(base_dn=None, ldap_filter=None)
+        self.assertEqual(len(users), 2)
+        self.assertEqual(users[0]["email"], "john.doe@company.com")
+        self.assertEqual(users[0]["ad_status"], "ACTIVE")
+        self.assertEqual(users[1]["email"], "disabled.user@company.com")
+        self.assertEqual(users[1]["ad_status"], "DISABLED")
+
+        # Verify default filter used
+        paged_call_args = mock_conn.extend.standard.paged_search.call_args[1]
+        self.assertEqual(paged_call_args["search_base"], "DC=corp,DC=local")
+        self.assertEqual(paged_call_args["search_filter"], "(&(objectCategory=person)(objectClass=user))")
+
+        # 2. Test REST endpoint POST /api/sync/ad-ingest/start with blank params
+        with patch.object(main_module.sync_service, "start_ad_ingest", return_value={"success": True, "run_id": 99}):
+            res = self.client.post("/api/sync/ad-ingest/start", json={
+                "ldap_filter": "",
+                "base_dn": "",
+                "count_limit": 0
+            })
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertTrue(data["success"])
+            self.assertEqual(data["run_id"], 99)
 
 
 if __name__ == "__main__":

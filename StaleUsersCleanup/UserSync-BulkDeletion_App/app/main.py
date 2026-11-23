@@ -437,6 +437,25 @@ def start_ldap_sync():
     return jsonify(result), status_code
 
 
+@app.route("/api/sync/ad-ingest/start", methods=["POST"])
+def start_ad_ingest():
+    data = request.get_json() or {}
+    ldap_filter = (data.get("ldap_filter") or "").strip() or None
+    base_dn = (data.get("base_dn") or "").strip() or None
+    try:
+        count_limit = int(data.get("count_limit", 0))
+    except (ValueError, TypeError):
+        count_limit = 0
+
+    result = sync_service.start_ad_ingest(
+        ldap_filter=ldap_filter,
+        base_dn=base_dn,
+        count_limit=count_limit
+    )
+    status_code = 200 if result.get("success") else 400
+    return jsonify(result), status_code
+
+
 @app.route("/api/sync/csv/start", methods=["POST"])
 def start_csv_sync():
     data = request.get_json() or {}
