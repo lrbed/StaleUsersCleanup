@@ -193,8 +193,8 @@ Write-Host "====================================================================
  Build Date: {datetime.now().strftime('%Y-%m-%d')}
 ======================================================================
 
-QUICK START INSTRUCTIONS:
--------------------------
+QUICK START INSTRUCTIONS (NEW INSTALL):
+----------------------------------------
 1. Extract this entire zip file to any directory on your computer 
    (e.g., C:\\Tools\\CloudSOC-Utility or your Desktop).
 
@@ -208,6 +208,16 @@ QUICK START INSTRUCTIONS:
 
 4. Keep the console window open while performing operations.
    To stop the utility, simply close the console window or press CTRL+C.
+
+UPGRADING AN EXISTING INSTALLATION:
+-----------------------------------
+1. Stop the currently running utility (close the console window).
+2. Extract this new zip to a new folder (e.g., C:\\Tools\\CloudSOC-Utility-v2.3.0\\).
+3. Copy your existing 'cloudsoc_state.db' (from the old folder or old 'data/' folder)
+   into this new folder's 'data/' directory.
+4. (Optional) Copy any custom 'config-*.json' files into 'tenant_configs/'.
+5. Double-click "Launch-CloudSOC-Utility.bat" in the new folder.
+   All historical users, staged actions, and audit logs will be loaded automatically!
 
 FILES & DIRECTORIES:
 --------------------
