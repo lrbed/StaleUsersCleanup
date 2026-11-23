@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symantec CloudSOC User Cleanup Utility</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="theme-slate min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                </div>
+                <div>
+                    <h1 class="text-base font-semibold leading-tight text-white flex items-center gap-2">
+                        CloudSOC User Cleanup Utility
+                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700/50">v2.2 Enterprise</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Broadcom Elastica IAM & Active Directory Delta Engine</p>
+                </div>
+            </div>
+
+            <!-- Global Status Bar & Theme Selector -->
+            <div class="flex items-center space-x-3 text-xs">
+                <!-- Theme Switcher -->
+                <div class="flex items-center space-x-1.5 bg-slate-950/80 border border-slate-700 rounded-lg px-2.5 py-1">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+                    <select id="theme-selector" onchange="changeTheme(this.value)" class="bg-transparent text-slate-300 text-xs focus:outline-none cursor-pointer">
+                        <option value="theme-slate" class="bg-slate-900 text-white">🌙 Slate Dark</option>
+                        <option value="theme-midnight" class="bg-slate-900 text-white">🌌 Midnight</option>
+                        <option value="theme-charcoal" class="bg-slate-900 text-white">💻 Charcoal</option>
+                        <option value="theme-light" class="bg-slate-900 text-white">☀️ Classic Light</option>
+                    </select>
+                </div>
+
+                <!-- 3-Tier Preflight Badge -->
+                <div id="preflight-badge" class="px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5 transition">
+                    <span class="w-2 h-2 rounded-full bg-slate-500" id="preflight-dot"></span>
+                    <span id="preflight-text">Preflight: Not Run</span>
+                </div>
+
+                <!-- Active Directory Health Pill -->
+                <div id="ad-health-badge" class="px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5 transition">
+                    <span class="w-2 h-2 rounded-full bg-slate-500" id="ad-dot"></span>
+                    <span id="ad-health-text">AD: Unknown</span>
+                </div>
+
+                <!-- Live Telemetry & 429 Counters -->
+                <div id="telemetry-pill" class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full border border-slate-700 bg-slate-800/90 text-slate-300 font-mono text-[11px]">
+                    <span id="telemetry-calls">API Calls: 0 (10000/hr)</span>
+                    <span class="text-slate-600">|</span>
+                    <span id="telemetry-429" class="text-amber-400 font-semibold">429s: 0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 border-t border-slate-800/60 text-sm overflow-x-auto">
+            <button onclick="switchTab('tab-preflight')" id="nav-tab-preflight" class="nav-tab border-b-2 border-blue-500 text-blue-400 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                <span>Preflight & Settings</span>
+            </button>
+            <button onclick="switchTab('tab-sync')" id="nav-tab-sync" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>Import & Sync Engine</span>
+            </button>
+            <button onclick="switchTab('tab-users')" id="nav-tab-users" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                <span>User Directory & DB</span>
+            </button>
+            <button onclick="switchTab('tab-execution')" id="nav-tab-execution" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>Execution Engine</span>
+            </button>
+            <button onclick="switchTab('tab-logs')" id="nav-tab-logs" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>Audit & Runs</span>
+            </button>
+            <button onclick="switchTab('tab-help')" id="nav-tab-help" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                <span>User Guide & Help</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Interrupted Run Recovery Banner (Auto-Discovery) -->
+    <div id="interrupted-banner" class="hidden bg-amber-950/90 border-b border-amber-700/80 text-amber-200 px-4 py-3 text-xs">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-2">
+                <svg class="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <span id="interrupted-text">Notice: An interrupted run was detected. You can resume processing from the exact last SQLite checkpoint.</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="resumeCurrentInterruptedRun()" class="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded font-bold text-xs shadow transition">
+                    ▶ Resume from Checkpoint
+                </button>
+                <button onclick="dismissCurrentInterruptedRun()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-medium text-xs border border-slate-700 transition">
+                    Dismiss
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active 429 Exponential Backoff Alert Banner -->
+    <div id="backoff-banner" class="hidden bg-rose-950/90 border-b border-rose-700/80 text-rose-200 px-4 py-2.5 text-xs sticky top-16 z-40">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <span class="animate-ping inline-flex h-2 w-2 rounded-full bg-rose-400 opacity-75"></span>
+                <span class="font-semibold text-rose-300">API Rate Limit Hit (HTTP 429):</span>
+                <span>Exponential backoff active. Retrying in <strong id="backoff-countdown" class="text-white text-sm font-mono">15</strong>s</span>
+            </div>
+            <button onclick="overrideBackoff()" id="btn-try-now" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded font-bold text-xs shadow transition flex items-center gap-1">
+                <span>⚡ TRY NOW</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Re-Authentication Banner (401/403) -->
+    <div id="reauth-banner" class="hidden bg-purple-950/90 border-b border-purple-700/80 text-purple-200 px-4 py-3 text-xs sticky top-16 z-40">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                <span class="font-semibold text-purple-300">Authentication Expired (HTTP 401/403):</span>
+                <span>Queue paused. Enter updated credentials or confirm to resume.</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <input type="text" id="reauth-key-id" placeholder="Key ID" class="bg-slate-900 border border-purple-700 rounded px-2 py-1 text-slate-200 text-xs">
+                <input type="password" id="reauth-key-secret" placeholder="Key Secret" class="bg-slate-900 border border-purple-700 rounded px-2 py-1 text-slate-200 text-xs">
+                <button onclick="submitReauth()" class="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded font-medium text-xs transition">
+                    Resume Queue
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+
+        <!-- ============================================================= -->
+        <!-- TAB 1: PREFLIGHT & SETTINGS                                    -->
+        <!-- ============================================================= -->
+        <section id="tab-preflight" class="tab-content space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Preflight Connectivity & Configuration</h2>
+                    <p class="text-xs text-slate-400">Validate CloudSOC API credentials, Active Directory reachability (auto-discovery or manual DC), and local state database.</p>
+                </div>
+                <button onclick="runPreflightChecks()" id="btn-run-preflight" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium shadow transition flex items-center gap-2">
+                    <svg id="preflight-spinner" class="hidden animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span>Run Preflight Tests</span>
+                </button>
+            </div>
+
+            <!-- Preflight Result Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <!-- CloudSOC API Check -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">CloudSOC API Auth</span>
+                        <span id="card-cloudsoc-badge" class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-400">Not Tested</span>
+                    </div>
+                    <div id="card-cloudsoc-status" class="text-sm font-medium text-slate-200">Awaiting test execution...</div>
+                    <div id="card-cloudsoc-details" class="text-xs text-slate-400 border-t border-slate-800 pt-2 space-y-1">
+                        <div>Server: <code id="lbl-api-server" class="text-slate-300">-</code></div>
+                        <div>Tenant: <code id="lbl-tenant" class="text-slate-300">-</code></div>
+                        <div>Latency: <span id="lbl-latency">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Active Directory Check -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Active Directory (LDAP)</span>
+                        <span id="card-ad-badge" class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-400">Not Tested</span>
+                    </div>
+                    <div id="card-ad-status" class="text-sm font-medium text-slate-200">Awaiting test execution...</div>
+                    <div id="card-ad-details" class="text-xs text-slate-400 border-t border-slate-800 pt-2 space-y-1">
+                        <div>Mode: <span id="lbl-ad-mode" class="text-slate-300">Auto-Discovery</span></div>
+                        <div>Fail-Closed Safety: <span class="text-emerald-400 font-medium">ENABLED</span></div>
+                    </div>
+                </div>
+
+                <!-- SQLite Local Database -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">State Database</span>
+                        <span id="card-db-badge" class="px-2 py-0.5 text-xs rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">● Connected</span>
+                    </div>
+                    <div id="card-db-status" class="text-sm font-medium text-emerald-400">SQLite Connected & Ready</div>
+                    <div id="card-db-details" class="text-xs text-slate-400 border-t border-slate-800 pt-2 space-y-1">
+                        <div>DB File: <code class="text-slate-300">cloudsoc_state.db</code></div>
+                        <div>Cached Records: <span id="lbl-db-users" class="text-slate-300">0 users</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Credentials Configuration Accordion (Collapsed by Default) -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <div onclick="toggleAccordion('sec-cloudsoc-creds', 'chevron-cloudsoc')" class="cursor-pointer p-4 sm:p-5 flex items-center justify-between hover:bg-slate-800/40 transition select-none">
+                    <div class="flex items-center space-x-3">
+                        <span id="chevron-cloudsoc" class="text-slate-400 text-xs font-mono transition-transform duration-200">▶</span>
+                        <div>
+                            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                                <span>CloudSOC API Credentials</span>
+                                <span id="badge-cloudsoc-header-status" class="text-[11px] font-normal px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/60">Configured</span>
+                            </h3>
+                            <p class="text-xs text-slate-400">Tenant endpoints, API keys, or switch between discovered tenant profiles.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 text-xs text-slate-400" onclick="event.stopPropagation()">
+                        <span class="text-slate-400 hidden sm:inline">Active Tenant:</span>
+                        <span id="header-active-tenant" class="font-mono font-semibold text-blue-400">-</span>
+                    </div>
+                </div>
+
+                <div id="sec-cloudsoc-creds" class="hidden border-t border-slate-800 p-5 space-y-4">
+                    <!-- Multi-Tenant Profile Switcher & Silent JSON Upload Bar -->
+                    <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
+                        <div class="flex items-center space-x-3 flex-1 min-w-[280px]">
+                            <label class="text-slate-300 font-medium whitespace-nowrap flex items-center gap-1">
+                                <span>Switch Tenant Profile:</span>
+                                <span class="has-tooltip cursor-help text-slate-400">ℹ️
+                                    <span class="tooltip-text">Discovered from local UserSync-BulkDeletion/config-*.json files. Switches credentials silently without showing secrets.</span>
+                                </span>
+                            </label>
+                            <select id="sel-detected-tenant" onchange="onSwitchTenantProfile(this.value)" class="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                                <option value="">-- Discovered Profiles Loading... --</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center space-x-2">
+                            <span class="text-slate-400 font-medium">Or Silent Import:</span>
+                            <label class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs border border-slate-700 font-medium cursor-pointer transition flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span>Select JSON File</span>
+                                <input type="file" id="file-silent-config" accept=".json" onchange="handleSilentConfigUpload(this.files[0])" class="hidden">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="silent-upload-status" class="hidden text-xs px-3 py-2 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 flex items-center justify-between">
+                        <span id="silent-upload-msg">Tenant credentials loaded silently.</span>
+                        <button onclick="document.getElementById('silent-upload-status').classList.add('hidden')" class="text-emerald-400 hover:text-emerald-200 font-bold ml-2">✕</button>
+                    </div>
+
+                    <!-- Manual Configuration Inputs -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <label class="block text-slate-400 font-medium mb-1">API Server Base URL</label>
+                            <input type="text" id="cfg-api-server" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 font-medium mb-1">CloudSOC Tenant Name</label>
+                            <input type="text" id="cfg-tenant" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 font-medium mb-1">API Key ID</label>
+                            <input type="text" id="cfg-key-id" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 font-medium mb-1">API Key Secret (Masked)</label>
+                            <input type="password" id="cfg-key-secret" placeholder="Enter new secret to overwrite" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button onclick="saveConfiguration()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shadow transition">
+                            Save Manual Credentials
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Directory / LDAP Configuration Accordion (Collapsed by Default) -->
+            <div id="card-ad-container" class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <div onclick="toggleAccordion('sec-ad-config', 'chevron-ad')" class="cursor-pointer p-4 sm:p-5 flex items-center justify-between hover:bg-slate-800/40 transition select-none">
+                    <div class="flex items-center space-x-3">
+                        <span id="chevron-ad" class="text-slate-400 text-xs font-mono transition-transform duration-200">▶</span>
+                        <div>
+                            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                                <span>Active Directory / LDAP Configuration</span>
+                                <span id="badge-ad-header-status" class="text-[11px] font-normal px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Not Tested</span>
+                            </h3>
+                            <p class="text-xs text-slate-400">Configure multi-forest auto-discovery or direct Domain Controller fallback.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3 text-xs text-slate-400" onclick="event.stopPropagation()">
+                        <button onclick="testManualADConnection()" id="btn-test-manual-ad" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs border border-slate-700 font-medium transition">
+                            Test Direct DC Connection
+                        </button>
+                    </div>
+                </div>
+
+                <div id="sec-ad-config" class="hidden border-t border-slate-800 p-5 space-y-4">
+                    <!-- Connection Mode Selector -->
+                    <div class="flex items-center space-x-6 text-xs bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" name="ad-mode" id="ad-mode-auto" value="auto" checked onchange="toggleADMode('auto')" class="text-blue-600 focus:ring-0">
+                            <span class="font-medium text-slate-200">Auto-Discovery (Forests / Global Catalog)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" name="ad-mode" id="ad-mode-manual" value="manual" onchange="toggleADMode('manual')" class="text-blue-600 focus:ring-0">
+                            <span class="font-medium text-amber-300">Manual Direct DC Connection (Fallback)</span>
+                        </label>
+                    </div>
+
+                    <!-- Auto-Discovery Forests Panel -->
+                    <div id="panel-ad-auto" class="space-y-4 text-xs">
+                        <div>
+                            <label class="block text-slate-400 font-medium mb-1">Active Directory Forests (JSON array or comma-separated FQDNs)</label>
+                            <input type="text" id="cfg-ad-forests" placeholder="e.g. casbteamlabs.pcslabs.org, corp.internal" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Manual Connection Panel -->
+                    <div id="panel-ad-manual" class="hidden space-y-4 text-xs">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-slate-400 font-medium mb-1">Domain Controller Host or IP</label>
+                                <input type="text" id="cfg-manual-ad-host" placeholder="e.g. 10.0.1.10 or dc01.corp.local" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 font-medium mb-1">LDAP Port</label>
+                                <input type="number" id="cfg-manual-ad-port" value="389" placeholder="389 / 636 / 3268" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                            </div>
+                            <div class="flex items-center space-x-2 pt-6">
+                                <input type="checkbox" id="cfg-manual-ad-ssl" class="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0">
+                                <label for="cfg-manual-ad-ssl" class="font-medium text-slate-300">Use SSL / LDAPS (Port 636/3269)</label>
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-slate-400 font-medium mb-1">Search Base DN (Optional)</label>
+                                <input type="text" id="cfg-manual-ad-base" placeholder="e.g. DC=corp,DC=local or OU=Users,DC=corp,DC=local" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shared Credentials -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-2 border-t border-slate-800">
+                        <div>
+                            <label class="block text-slate-400 font-medium mb-1">Service Account Username (e.g. DOMAIN\svc_user or user@domain)</label>
+                            <input type="text" id="cfg-ad-user" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 font-medium mb-1">Service Account Password</label>
+                            <input type="password" id="cfg-ad-pass" placeholder="Enter password to overwrite" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button onclick="saveConfiguration()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shadow transition">
+                            Save AD Configuration
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- TAB 2: IMPORT & SYNC ENGINE (Sub-Tabs / Channel Segments)     -->
+        <!-- ============================================================= -->
+        <section id="tab-sync" class="tab-content hidden space-y-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Import & Synchronization Engine</h2>
+                    <p class="text-xs text-slate-400">Select an ingestion channel to selectively query users, run Active Directory safety audits, or load CSV files.</p>
+                </div>
+            </div>
+
+            <!-- Ingestion Channel Selector Sub-Tabs (Clean Real Estate) -->
+            <div class="flex items-center space-x-2 bg-slate-950/90 p-1.5 rounded-xl border border-slate-800 text-xs">
+                <button onclick="switchSyncChannel('channel-cloudsoc')" id="btn-channel-cloudsoc" class="sync-channel-btn flex-1 py-2 px-3 rounded-lg font-medium transition flex items-center justify-center gap-2 bg-blue-600 text-white shadow">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+                    <span>CloudSOC Tenant User Ingestion</span>
+                </button>
+                <button onclick="switchSyncChannel('channel-ad')" id="btn-channel-ad" class="sync-channel-btn flex-1 py-2 px-3 rounded-lg font-medium transition flex items-center justify-center gap-2 text-slate-400 hover:text-slate-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    <span>Active Directory Delta Sync</span>
+                </button>
+                <button onclick="switchSyncChannel('channel-csv')" id="btn-channel-csv" class="sync-channel-btn flex-1 py-2 px-3 rounded-lg font-medium transition flex items-center justify-center gap-2 text-slate-400 hover:text-slate-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>CSV File Ingestion</span>
+                </button>
+            </div>
+
+            <!-- CHANNEL 1: CloudSOC Tenant User Ingestion (Selective & Inactivity Filters) -->
+            <div id="channel-cloudsoc" class="sync-channel-panel bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                            <span>CloudSOC Tenant User Ingestion (Selective & Inactivity Filters)</span>
+                            <span class="has-tooltip cursor-help text-slate-400">
+                                ℹ️
+                                <span class="tooltip-text">Pulls live users from CloudSOC tenant API. Ingest stale users only or specify count limits and domain criteria to conserve API quota.</span>
+                            </span>
+                        </h3>
+                        <p class="text-xs text-slate-400">Stream accounts directly from CloudSOC API with optional inactivity rules and compound targeting.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="startTargetedSync()" id="btn-run-targeted-sync" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <span>Run Ingestion</span>
+                        </button>
+                        <button onclick="startFullCloudsocSync()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700 transition">
+                            Full Tenant Ingestion
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stale-Only Inactivity Options Callout -->
+                <div class="stale-filter-banner bg-slate-950/70 border border-amber-900/60 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center space-x-3">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" id="target-stale-only" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+                            <span class="font-semibold text-amber-300">Import Stale Users ONLY</span>
+                        </label>
+                        <span class="text-slate-500">|</span>
+                        <div class="flex items-center space-x-2">
+                            <label class="text-slate-300">Inactivity Threshold:</label>
+                            <input type="number" id="target-inactivity-days" value="90" min="1" max="1825" class="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-mono">
+                            <span class="text-slate-400">days without activity</span>
+                        </div>
+                    </div>
+                    <label class="flex items-center space-x-2 cursor-pointer text-slate-300">
+                        <input type="checkbox" id="target-include-blank" checked class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+                        <span>Include Users with Never / Blank Activity Date</span>
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">Max Count Limit (Optional)</label>
+                        <input type="number" id="target-count-limit" placeholder="e.g. 1000" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">Criteria Match Mode</label>
+                        <select id="target-match-mode" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+                            <option value="all">Match ALL Criteria (AND)</option>
+                            <option value="any">Match ANY Criteria (OR)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">Email Domains (comma-separated)</label>
+                        <input type="text" id="target-email-domains" placeholder="e.g. pcslabs.org, broadcom.com" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">NetBIOS Domains (Secondary ID prefix)</label>
+                        <input type="text" id="target-netbios-domains" placeholder="e.g. PCSLABS, DOMAIN" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">CloudSOC Group Name</label>
+                        <input type="text" id="target-groups" list="available-groups-list" placeholder="Choose or type group name" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">Created By Filter</label>
+                        <input type="text" id="target-created-by" placeholder="e.g. SpanVA, Directory Sync, Securlet" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200">
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHANNEL 2: Active Directory Delta Correlation -->
+            <div id="channel-ad" class="sync-channel-panel hidden bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                            <span>Active Directory Delta Correlation</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">Fail-Closed Safety</span>
+                        </h3>
+                        <p class="text-xs text-slate-400">Scans all cached CloudSOC users against configured AD forests or direct DC. Accounts are flagged as Active, Disabled, or NotFound in AD.</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="startLdapSync(false)" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold shadow transition">
+                            Check Unchecked Users
+                        </button>
+                        <button onclick="startLdapSync(true)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700 transition">
+                            Re-check All Users
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 text-xs text-slate-300 space-y-2">
+                    <div class="flex items-center gap-2 font-medium text-emerald-400">
+                        <span>🛡️ Safety Mechanism:</span>
+                    </div>
+                    <p class="text-slate-400">If any Active Directory forest or Domain Controller is unreachable, the engine fails closed — preserving all affected accounts and preventing any unverified deletions.</p>
+                </div>
+            </div>
+
+            <!-- CHANNEL 3: CSV File Ingestion -->
+            <div id="channel-csv" class="sync-channel-panel hidden bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                            <span>CSV Export File Ingestion</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">Local Disk</span>
+                        </h3>
+                        <p class="text-xs text-slate-400">Imports user records from exported_users.csv directly into the SQLite state database.</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="startCsvImport()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs border border-slate-700 font-semibold shadow transition">
+                            Import exported_users.csv
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 text-xs text-slate-400">
+                    <p>Reads from <code class="text-slate-200">./UserSync-BulkDeletion/exported_users.csv</code> or current root directory. Ideal for testing or offline staging.</p>
+                </div>
+            </div>
+
+            <!-- Dynamic Datalist for Discovered Groups (Shared) -->
+            <datalist id="available-groups-list"></datalist>
+
+            <!-- Sync Progress Card (Always Visible Across Channels) -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sync Engine Progress</span>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="pauseSync()" id="btn-sync-pause" class="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded text-xs font-medium transition">Pause</button>
+                        <button onclick="resumeSync()" id="btn-sync-resume" class="px-2.5 py-1 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded text-xs font-medium transition">Resume</button>
+                        <button onclick="cancelSync()" id="btn-sync-cancel" class="px-2.5 py-1 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded text-xs font-medium transition">Cancel</button>
+                    </div>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden">
+                    <div id="sync-progress-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span id="sync-status-msg">Idle</span>
+                    <span id="sync-progress-percent">0%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- TAB 3: USER DIRECTORY & STATE DB                               -->
+        <!-- ============================================================= -->
+        <section id="tab-users" class="tab-content hidden space-y-6">
+            <!-- Filter & Search Toolbar -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                    <!-- Keyword Search -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1">Keyword Search (Email / Name / ID)</label>
+                        <input type="text" id="filter-search" oninput="debounceUserSearch()" placeholder="Search text..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <!-- Regex Search (Matches Email, Secondary ID & CloudSOC ID) -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1 flex items-center gap-1">
+                            <span>Regex Filter (Email & User IDs)</span>
+                            <span class="has-tooltip cursor-help text-slate-400">
+                                ℹ️
+                                <span class="tooltip-text">Standard Python regex applied to email and secondary ID (e.g. ^temp_.*@acquired\.com$).</span>
+                            </span>
+                        </label>
+                        <input type="text" id="filter-regex" oninput="debounceUserSearch()" placeholder="e.g. ^temp_.*@domain\.com$" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 font-mono text-xs focus:outline-none focus:border-blue-500">
+                    </div>
+                    <!-- Active Directory Status -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1">Active Directory Status</label>
+                        <select id="filter-ad-status" onchange="loadUsers(1)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                            <option value="">All AD Statuses</option>
+                            <option value="Active">Active (Protected)</option>
+                            <option value="Disabled">Disabled</option>
+                            <option value="NotFound">NotFound</option>
+                            <option value="Error">Error (Safety Locked)</option>
+                            <option value="Unchecked">Unchecked</option>
+                        </select>
+                    </div>
+                    <!-- Inactivity Filter (Customizable) -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1">Inactivity Threshold</label>
+                        <div class="flex items-center gap-1.5">
+                            <select id="filter-inactivity" onchange="onInactivityFilterChange()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                                <option value="">Any Inactivity</option>
+                                <option value="30">Inactive > 30 Days</option>
+                                <option value="60">Inactive > 60 Days</option>
+                                <option value="90">Inactive > 90 Days</option>
+                                <option value="180">Inactive > 180 Days (6 Mos)</option>
+                                <option value="365">Inactive > 365 Days (1 Yr)</option>
+                                <option value="730">Inactive > 730 Days (2 Yrs)</option>
+                                <option value="blank">Blank / Never Active Only</option>
+                                <option value="custom">Custom Days...</option>
+                            </select>
+                            <input type="number" id="filter-custom-inactivity-days" placeholder="Days" oninput="debounceUserSearch()" class="hidden w-20 bg-slate-950 border border-blue-500 rounded-lg px-2 py-1.5 text-slate-200 text-xs font-mono focus:outline-none">
+                        </div>
+                    </div>
+                    <!-- Origin Filter (FILT-04) -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1">Sync Origin</label>
+                        <select id="filter-origin" onchange="loadUsers(1)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                            <option value="">All Origins</option>
+                            <option value="gatelet">Gatelet (AD Sync / SpanVA / API)</option>
+                            <option value="securlet">Securlet (SaaS / O365 / Google)</option>
+                        </select>
+                    </div>
+                    <!-- CloudSOC Group Filter (Populated from All Discovered Groups) -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1">CloudSOC / AD Group</label>
+                        <select id="filter-group" onchange="loadUsers(1)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                            <option value="">All Groups (Auto-Discovered)</option>
+                        </select>
+                    </div>
+                    <!-- CloudSOC Active Status -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1">CloudSOC Status</label>
+                        <select id="filter-is-active" onchange="loadUsers(1)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                            <option value="">All CloudSOC Status</option>
+                            <option value="1">CloudSOC: Active</option>
+                            <option value="0">CloudSOC: Inactive</option>
+                        </select>
+                    </div>
+                    <!-- Action Filter -->
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-medium mb-1">Planned Action</label>
+                        <select id="filter-selected-action" onchange="loadUsers(1)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500">
+                            <option value="">All Actions</option>
+                            <option value="deactivate">Deactivate</option>
+                            <option value="move_group">Move to Pending_Deletion</option>
+                            <option value="delete">Hard Delete</option>
+                            <option value="none">None / Unassigned</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Preparation & Bulk Staging Bar -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex items-center space-x-3">
+                    <span class="text-slate-400 font-medium">Selected: <strong id="lbl-selected-count" class="text-blue-400">0</strong> users</span>
+                    <button onclick="selectAllVisible(true)" class="text-blue-400 hover:text-blue-300 underline text-xs">Select Visible</button>
+                    <button onclick="selectAllVisible(false)" class="text-slate-400 hover:text-slate-300 underline text-xs">Clear Selection</button>
+                </div>
+                <!-- Action Buttons -->
+                <div class="flex items-center space-x-2">
+                    <span class="text-slate-500 mr-1">Stage Action:</span>
+                    <button onclick="applyBulkAction('deactivate')" class="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 rounded border border-amber-800/80 font-medium transition flex items-center gap-1">
+                        <span>Deactivate</span>
+                    </button>
+                    <button onclick="applyBulkAction('move_group')" class="px-2.5 py-1 bg-purple-950 hover:bg-purple-900 text-purple-200 rounded border border-purple-800/80 font-medium transition flex items-center gap-1">
+                        <span>Move Group</span>
+                    </button>
+                    <button onclick="applyBulkAction('delete')" class="px-2.5 py-1 bg-red-950 hover:bg-red-900 text-red-200 rounded border border-red-800/80 font-medium transition flex items-center gap-1">
+                        <span>Hard Delete</span>
+                    </button>
+                    <button onclick="applyBulkAction('none')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 font-medium transition">
+                        Clear Action
+                    </button>
+                </div>
+            </div>
+
+            <!-- Server-Side Paginated Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="py-3 px-3 w-8">
+                                    <input type="checkbox" id="chk-header" onchange="toggleSelectAllHeader(this)" class="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0">
+                                </th>
+                                <th class="py-3 px-3">User Email / CloudSOC ID</th>
+                                <th class="py-3 px-3">Name</th>
+                                <th class="py-3 px-3">Role / Privileges</th>
+                                <th class="py-3 px-3">Secondary ID</th>
+                                <th class="py-3 px-3">CloudSOC</th>
+                                <th class="py-3 px-3">Active Directory (AD)</th>
+                                <th class="py-3 px-3">Last Activity</th>
+                                <th class="py-3 px-3">Planned Action</th>
+                                <th class="py-3 px-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body" class="divide-y divide-slate-800/60 font-mono text-xs">
+                            <tr>
+                                <td colspan="10" class="py-8 text-center text-slate-500 italic">No users loaded yet. Run a sync or import.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div class="bg-slate-950/80 border-t border-slate-800 px-4 py-3 flex items-center justify-between text-xs text-slate-400">
+                    <div>
+                        Showing <span id="lbl-page-range" class="text-slate-200">0 - 0</span> of <span id="lbl-total-users" class="text-slate-200">0</span> users
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="prevPage()" id="btn-prev-page" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white rounded transition">Previous</button>
+                        <span id="lbl-current-page" class="px-2">Page 1</span>
+                        <button onclick="nextPage()" id="btn-next-page" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white rounded transition">Next</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- TAB 4: EXECUTION ENGINE                                       -->
+        <!-- ============================================================= -->
+        <section id="tab-execution" class="tab-content hidden space-y-6">
+            <!-- Queue Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <span class="text-xs font-semibold uppercase text-amber-400">Queued Deactivate</span>
+                    <div id="exec-summary-deactivate" class="text-2xl font-bold text-white mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">Users to disable in CloudSOC</span>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <span class="text-xs font-semibold uppercase text-purple-400">Queued Move Group</span>
+                    <div id="exec-summary-move" class="text-2xl font-bold text-white mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">Move to Pending_Deletion</span>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <span class="text-xs font-semibold uppercase text-rose-400">Queued Hard Delete</span>
+                    <div id="exec-summary-delete" class="text-2xl font-bold text-white mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">Permanent deletion (CONFIRM needed)</span>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <span class="text-xs font-semibold uppercase text-blue-400">Total Pending</span>
+                    <div id="exec-summary-total" class="text-2xl font-bold text-white mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">Candidates in execution queue</span>
+                </div>
+            </div>
+
+            <!-- Role Guard Safety Configuration -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                            <span>🛡️ Role Safety Guard (Configurable)</span>
+                            <span class="has-tooltip cursor-help text-slate-400">
+                                ℹ️
+                                <span class="tooltip-text">Any user holding a protected role or membership in a protected group is completely shielded from modification or deletion.</span>
+                            </span>
+                        </h3>
+                        <p class="text-xs text-slate-400">Guarantees that privileged administrator accounts are never deleted or modified regardless of filter conditions.</p>
+                    </div>
+                    <button onclick="saveRoleGuardConfig()" id="btn-save-role-guard" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition">
+                        Save Role Guard Settings
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div class="flex items-center space-x-2 pt-2">
+                        <input type="checkbox" id="cfg-role-guard-enabled" checked class="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0">
+                        <label for="cfg-role-guard-enabled" class="font-medium text-slate-200">Enable Role Safety Guard</label>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">Protected Roles (comma-separated)</label>
+                        <input type="text" id="cfg-protected-roles" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200 font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-medium mb-1">Protected Groups (comma-separated)</label>
+                        <input type="text" id="cfg-protected-groups" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200 font-mono text-xs">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execution Control Bar -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm font-semibold text-white">Execution Control:</span>
+                        <span id="exec-state-badge" class="px-2.5 py-1 text-xs rounded-full bg-slate-800 text-slate-400 font-mono font-medium">State: IDLE</span>
+                        <span id="exec-mode-badge" class="px-2.5 py-1 text-xs rounded-full bg-blue-950 text-blue-400 border border-blue-800 font-mono">Mode: -</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="startExecution('dry_run')" id="btn-exec-dryrun" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            <span>Start Dry-Run</span>
+                        </button>
+                        <button onclick="requestLiveExecution()" id="btn-exec-live" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <span>Start Live Execution</span>
+                        </button>
+                        <button onclick="pauseExecution()" id="btn-exec-pause" class="px-3 py-1.5 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded text-xs font-medium transition">
+                            Pause
+                        </button>
+                        <button onclick="resumeExecution()" id="btn-exec-resume" class="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded text-xs font-medium transition">
+                            Resume
+                        </button>
+                        <button onclick="stopExecution()" id="btn-exec-stop" class="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded text-xs font-medium transition">
+                            Stop
+                        </button>
+                        <button onclick="retryFailedExecution()" id="btn-exec-retry" class="px-3 py-1.5 bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800 rounded text-xs font-medium transition">
+                            Retry Failed
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Progress Bar -->
+                <div class="space-y-2 pt-2">
+                    <div class="w-full bg-slate-950 rounded-full h-3 overflow-hidden">
+                        <div id="exec-progress-bar" class="bg-gradient-to-r from-blue-500 to-emerald-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between text-xs text-slate-400">
+                        <div class="flex items-center space-x-4">
+                            <span>Progress: <strong id="exec-progress-count" class="text-white">0 / 0</strong> (<span id="exec-progress-percent">0%</span>)</span>
+                            <span class="text-emerald-400">Success: <strong id="exec-success-count">0</strong></span>
+                            <span class="text-amber-400">Skipped (Guards): <strong id="exec-skipped-count">0</strong></span>
+                            <span class="text-rose-400">Failed: <strong id="exec-failed-count">0</strong></span>
+                        </div>
+                        <div id="exec-ticker" class="font-mono text-slate-300 truncate max-w-md">Idle</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Execution Log Stream -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 font-mono text-xs">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span class="text-slate-400 font-semibold uppercase tracking-wider text-[11px]">Live Execution Logs</span>
+                    <span id="exec-log-run-id" class="text-slate-500">Run: None</span>
+                </div>
+                <div id="exec-logs-console" class="space-y-1 max-h-[350px] overflow-y-auto pr-2">
+                    <div class="text-slate-500 italic">No execution logs yet. Start dry-run or live execution.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- TAB 5: AUDIT & RUNS                                           -->
+        <!-- ============================================================= -->
+        <section id="tab-logs" class="tab-content hidden space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">System Audit & Execution Runs</h2>
+                    <p class="text-xs text-slate-400">Historical records of execution runs, rate-limiting backoffs, and exportable compliance audit logs.</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="cleanLogsOlderThan(7)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded text-xs border border-slate-700 transition">
+                        Clean Logs > 7 Days
+                    </button>
+                    <button onclick="cleanAllLogs()" class="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 rounded text-xs border border-rose-800 transition">
+                        Clear All Logs
+                    </button>
+                    <button onclick="refreshLogs(); loadExecutionRuns();" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs border border-slate-700 transition">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Execution Runs History Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <div class="px-4 py-3 border-b border-slate-800">
+                    <h3 class="text-xs font-semibold uppercase text-slate-400 tracking-wider">Execution Run History</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="py-2.5 px-3">Run ID</th>
+                                <th class="py-2.5 px-3">Mode</th>
+                                <th class="py-2.5 px-3">Status</th>
+                                <th class="py-2.5 px-3">Candidates</th>
+                                <th class="py-2.5 px-3">Success</th>
+                                <th class="py-2.5 px-3">Skipped</th>
+                                <th class="py-2.5 px-3">Failed</th>
+                                <th class="py-2.5 px-3">Start Time</th>
+                                <th class="py-2.5 px-3">Export</th>
+                            </tr>
+                        </thead>
+                        <tbody id="runs-table-body" class="divide-y divide-slate-800/60 font-mono text-xs">
+                            <tr>
+                                <td colspan="9" class="py-6 text-center text-slate-500 italic">No execution runs recorded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Real-time Log Stream -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-hidden">
+                <div id="logs-container" class="space-y-1.5 max-h-[500px] overflow-y-auto pr-2">
+                    <div class="text-slate-500 italic">No logs recorded yet.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- TAB 6: IN-APP USER GUIDE & HELP                               -->
+        <!-- ============================================================= -->
+        <section id="tab-help" class="tab-content hidden space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                        <span>📖 User Documentation & Operations Guide</span>
+                    </h2>
+                    <p class="text-xs text-slate-400">Searchable reference manual covering architecture, API boundaries, AD safety rules, and recovery.</p>
+                </div>
+                <div class="w-full sm:w-72">
+                    <input type="text" id="help-search-input" oninput="filterHelpDocs(this.value)" placeholder="Search documentation..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-blue-500">
+                </div>
+            </div>
+
+            <!-- Help Articles Container -->
+            <div id="help-articles-container" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="text-slate-500 italic text-xs">Loading documentation...</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Hard Delete Safety Confirmation Modal -->
+    <div id="modal-confirm-delete" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="bg-slate-900 border border-rose-700/80 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center space-x-3 text-rose-400">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <h3 class="text-base font-bold text-white">DANGER: Hard Delete Confirmation</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                You are about to start a <strong class="text-rose-400">LIVE EXECUTION</strong> that includes queued <strong class="text-rose-400">Hard Deletions</strong>.
+                Hard delete permanently removes user profiles and tenant associations from Symantec CloudSOC.
+            </p>
+            <div class="bg-rose-950/50 border border-rose-800/60 rounded-lg p-3 text-xs text-rose-200">
+                To proceed, type <code class="font-bold text-white bg-rose-900 px-1.5 py-0.5 rounded">CONFIRM</code> below:
+            </div>
+            <div>
+                <input type="text" id="input-confirm-delete" oninput="checkDeleteConfirmation(this.value)" placeholder="Type CONFIRM" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono text-sm focus:border-rose-500 focus:outline-none">
+            </div>
+            <div class="flex items-center justify-end space-x-3 pt-2">
+                <button onclick="closeDeleteModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition">
+                    Cancel
+                </button>
+                <button onclick="proceedLiveExecution()" id="btn-modal-proceed-delete" disabled class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white rounded-lg text-xs font-bold transition">
+                    Proceed with Live Deletion
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="border-t border-slate-800/60 bg-slate-950 py-3 text-center text-xs text-slate-500">
+        Broadcom Symantec CloudSOC Admin Automation • Stateful SQLite Architecture
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

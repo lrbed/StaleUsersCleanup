@@ -1,0 +1,41 @@
+# System Architecture, Coding Standards & Non-Negotiable Constraints
+
+### 1. Technology Stack & Boundaries
+* **Backend:** Python (Flask). Do NOT introduce external web frameworks or heavy asynchronous runtimes (e.g. Twisted, Tornado). Keep thread-based execution.
+* **Frontend:** Semantic HTML5, Vanilla JavaScript (`app.js`), Tailwind CSS utility classes. Absolutely NO node_modules, webpack, vite, npm, or complex frontend compilation toolchains. The frontend must remain 100% runnable directly from static files.
+* **Database:** Local SQLite (`cloudsoc_state.db`).
+  * Database connections MUST enable Write-Ahead Logging: `PRAGMA journal_mode=WAL;` and `PRAGMA synchronous=NORMAL;`.
+  * Custom `REGEXP` function must be registered on all connection instances.
+  * Server-side pagination (`LIMIT` and `OFFSET`) must be used for all user queries. Never load 100,000 records into browser memory.
+
+### 2. State Management & Crash Fault Tolerance (CRITICAL)
+The application handles 100,000+ users. Environments, servers, and networks crash.
+* **Statefulness:** The execution engine must maintain per-user checkpoints. After every API mutation against a user, immediately update `users.action_status` and increment `execution_runs` progress in SQLite.
+* **Interrupted Run Recovery:** On application startup, the backend must check for interrupted runs (`get_latest_interrupted_run()`) and provide resumption capabilities that continue from the exact last checkpoint.
+
+### 3. API Rate Limiting & Sliding-Window Quota (CRITICAL)
+* **Rate Limits:** Broadcom CloudSOC enforces $\le 2.5$ calls per second and 10,000 calls per hour.
+* **Sliding Window:** Rate limiter must maintain a rolling 3600-second window of call timestamps.
+* **Backoff Strategy:** On HTTP `429 Too Many Requests` or `5XX` server errors, pause and backoff exponentially ($15\text{s}, 30\text{s}, 60\text{s}, \dots$).
+* **Interruptible Sleep:** Backoff sleep loops must be slice-based and check a `threading.Event` so operators can click "Try Now" to override backoff immediately.
+
+### 4. Active Directory Fail-Closed Safety Lock (CRITICAL)
+* If Active Directory is unreachable, times out, or returns a socket error, status MUST resolve to `Error`.
+* Under NO circumstances should any user with `ad_status in ('Active', 'Error', 'Unchecked')` be deleted during live execution.
+
+### 5. Role Safety Guard
+* Privileged accounts (`Admin`, `System Admin`, `Super Admin`, `Security Admin`, `Domain Admins`, `Administrators`, `Cloudsoc_PowerAdmins`) must have `is_privileged = 1`.
+* Privileged accounts must have their selection checkboxes locked in the UI and must be skipped during execution runs.
+
+### 6. Hard Undo Serialization
+* Before executing any permanent deletion (`DELETE`), serialize the complete CloudSOC JSON profile into `users.raw_json`.
+* Hard Undo must reconstruct and recreate the profile using `POST /api/v1/users/` from `raw_json`.
+
+### 7. Data Privacy & Zero Telemetry
+* All API keys, secrets, service account credentials, and user data must remain local.
+* Zero outbound telemetry to third parties. Only communicate with the configured CloudSOC tenant URL and configured on-prem Domain Controllers.
+
+### 8. Python Code Standards
+* **No `datetime.utcnow()`:** In Python 3.12+, `utcnow()` is deprecated. Always use `datetime.now(timezone.utc)`.
+* **Docstrings:** Use raw string notation `r"""..."""` whenever docstrings contain backslashes or regex patterns.
+* **Typing:** Provide explicit type hints on all public functions.

@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite database files
+*.db
+*.db-wal
+*.db-shm
+
+# Bundled distribution binaries and archives
+dist/
+**/dist/
+runtime/
+**/runtime/
+*.zip
+
+# Logs
+*.log
