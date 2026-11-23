@@ -281,3 +281,86 @@ code, pre {
 .glow-blue {
     box-shadow: 0 0 20px -5px rgba(59, 130, 246, 0.3);
 }
+
+/* Modern Checkbox & Form Controls Styling */
+input[type="checkbox"], input[type="radio"] {
+    accent-color: #2563eb;
+    cursor: pointer;
+}
+
+body.theme-slate input[type="checkbox"],
+body.theme-midnight input[type="checkbox"],
+body.theme-charcoal input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    background-color: var(--bg-input);
+    display: inline-grid;
+    place-content: center;
+    vertical-align: middle;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+body.theme-slate input[type="checkbox"]::before,
+body.theme-midnight input[type="checkbox"]::before,
+body.theme-charcoal input[type="checkbox"]::before {
+    content: "";
+    width: 0.55rem;
+    height: 0.55rem;
+    transform: scale(0);
+    transition: 120ms transform ease-in-out;
+    box-shadow: inset 1em 1em #3b82f6;
+    transform-origin: center;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+body.theme-slate input[type="checkbox"]:checked,
+body.theme-midnight input[type="checkbox"]:checked,
+body.theme-charcoal input[type="checkbox"]:checked {
+    background-color: #1e3a8a;
+    border-color: #3b82f6;
+}
+
+body.theme-slate input[type="checkbox"]:checked::before,
+body.theme-midnight input[type="checkbox"]:checked::before,
+body.theme-charcoal input[type="checkbox"]:checked::before {
+    transform: scale(1);
+    box-shadow: inset 1em 1em #ffffff;
+}
+
+body.theme-slate input[type="checkbox"]:disabled,
+body.theme-midnight input[type="checkbox"]:disabled,
+body.theme-charcoal input[type="checkbox"]:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-color: #475569;
+}
+
+/* Header & Nav polish */
+.nav-tab {
+    position: relative;
+    font-weight: 500;
+}
+.nav-tab:hover {
+    color: #e2e8f0;
+}
+
+/* KPI metric cards */
+.kpi-card {
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.kpi-card:hover {
+    transform: translateY(-1px);
+    border-color: #3b82f6;
+}
+
+/* Sticky top table headers */
+.sticky-table-header th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--bg-card);
+}

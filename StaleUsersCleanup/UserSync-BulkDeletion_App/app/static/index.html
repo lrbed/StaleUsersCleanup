@@ -28,25 +28,25 @@
 <body class="theme-slate min-h-screen flex flex-col transition-colors duration-200">
 
     <!-- Top Navigation Bar -->
-    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3 min-h-[4rem]">
+            <div class="flex items-center space-x-3 min-w-max">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/25 ring-1 ring-white/10">
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                 </div>
                 <div>
-                    <h1 class="text-base font-semibold leading-tight text-white flex items-center gap-2">
-                        CloudSOC User Cleanup Utility
-                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700/50">v2.2 Enterprise</span>
+                    <h1 class="text-sm sm:text-base font-semibold leading-tight text-white flex items-center gap-2">
+                        <span>CloudSOC Cleanup Utility</span>
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-900/70 text-blue-300 border border-blue-600/50 shadow-sm">v2.3.0 Enterprise</span>
                     </h1>
-                    <p class="text-xs text-slate-400">Broadcom Elastica IAM & Active Directory Delta Engine</p>
+                    <p class="text-xs text-slate-400 hidden sm:block">Broadcom Elastica IAM & Active Directory Delta Engine</p>
                 </div>
             </div>
 
             <!-- Global Status Bar & Theme Selector -->
-            <div class="flex items-center space-x-3 text-xs">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
                 <!-- Theme Switcher -->
-                <div class="flex items-center space-x-1.5 bg-slate-950/80 border border-slate-700 rounded-lg px-2.5 py-1">
+                <div class="flex items-center space-x-1.5 bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1 shadow-sm">
                     <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
                     <select id="theme-selector" onchange="changeTheme(this.value)" class="bg-transparent text-slate-300 text-xs focus:outline-none cursor-pointer">
                         <option value="theme-slate" class="bg-slate-900 text-white">🌙 Slate Dark</option>
@@ -57,20 +57,20 @@
                 </div>
 
                 <!-- 3-Tier Preflight Badge -->
-                <div id="preflight-badge" class="px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5 transition">
+                <div id="preflight-badge" class="px-2.5 py-1 rounded-full border border-slate-700/80 bg-slate-800/80 text-slate-300 flex items-center gap-1.5 shadow-sm whitespace-nowrap">
                     <span class="w-2 h-2 rounded-full bg-slate-500" id="preflight-dot"></span>
                     <span id="preflight-text">Preflight: Not Run</span>
                 </div>
 
                 <!-- Active Directory Health Pill -->
-                <div id="ad-health-badge" class="px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5 transition">
+                <div id="ad-health-badge" class="px-2.5 py-1 rounded-full border border-slate-700/80 bg-slate-800/80 text-slate-300 flex items-center gap-1.5 shadow-sm whitespace-nowrap">
                     <span class="w-2 h-2 rounded-full bg-slate-500" id="ad-dot"></span>
                     <span id="ad-health-text">AD: Unknown</span>
                 </div>
 
                 <!-- Live Telemetry & 429 Counters -->
-                <div id="telemetry-pill" class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full border border-slate-700 bg-slate-800/90 text-slate-300 font-mono text-[11px]">
-                    <span id="telemetry-calls">API Calls: 0 (10000/hr)</span>
+                <div id="telemetry-pill" class="flex items-center gap-2 px-2.5 py-1 rounded-full border border-slate-700/80 bg-slate-950/70 text-slate-300 font-mono text-[11px] shadow-sm whitespace-nowrap">
+                    <span id="telemetry-calls">API: 0/hr</span>
                     <span class="text-slate-600">|</span>
                     <span id="telemetry-429" class="text-amber-400 font-semibold">429s: 0</span>
                 </div>
@@ -78,28 +78,28 @@
         </div>
 
         <!-- Navigation Tabs -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 border-t border-slate-800/60 text-sm overflow-x-auto">
-            <button onclick="switchTab('tab-preflight')" id="nav-tab-preflight" class="nav-tab border-b-2 border-blue-500 text-blue-400 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-2 sm:space-x-4 border-t border-slate-800/80 text-xs sm:text-sm overflow-x-auto scrollbar-none">
+            <button onclick="switchTab('tab-preflight')" id="nav-tab-preflight" class="nav-tab border-b-2 border-blue-500 text-blue-400 font-medium py-2.5 px-2 transition flex items-center gap-1.5 whitespace-nowrap">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
                 <span>Preflight & Settings</span>
             </button>
-            <button onclick="switchTab('tab-sync')" id="nav-tab-sync" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+            <button onclick="switchTab('tab-sync')" id="nav-tab-sync" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-2.5 px-2 transition flex items-center gap-1.5 whitespace-nowrap">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                <span>Import & Sync Engine</span>
+                <span>Import & Sync</span>
             </button>
-            <button onclick="switchTab('tab-users')" id="nav-tab-users" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+            <button onclick="switchTab('tab-users')" id="nav-tab-users" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-2.5 px-2 transition flex items-center gap-1.5 whitespace-nowrap">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                <span>User Directory & DB</span>
+                <span>User Directory</span>
             </button>
-            <button onclick="switchTab('tab-execution')" id="nav-tab-execution" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+            <button onclick="switchTab('tab-execution')" id="nav-tab-execution" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-2.5 px-2 transition flex items-center gap-1.5 whitespace-nowrap">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 <span>Execution Engine</span>
             </button>
-            <button onclick="switchTab('tab-logs')" id="nav-tab-logs" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+            <button onclick="switchTab('tab-logs')" id="nav-tab-logs" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-2.5 px-2 transition flex items-center gap-1.5 whitespace-nowrap">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 <span>Audit & Runs</span>
             </button>
-            <button onclick="switchTab('tab-help')" id="nav-tab-help" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-3 px-1 transition flex items-center gap-1.5 whitespace-nowrap">
+            <button onclick="switchTab('tab-help')" id="nav-tab-help" class="nav-tab border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium py-2.5 px-2 transition flex items-center gap-1.5 whitespace-nowrap">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
                 <span>User Guide & Help</span>
             </button>
@@ -419,24 +419,25 @@
                         <p class="text-xs text-slate-400">Stream accounts directly from CloudSOC API with optional inactivity rules and compound targeting.</p>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="startTargetedSync()" id="btn-run-targeted-sync" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
+                        <button onclick="startTargetedSync()" id="btn-run-targeted-sync" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                             <span>Run Ingestion</span>
                         </button>
-                        <button onclick="startFullCloudsocSync()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700 transition">
-                            Full Tenant Ingestion
+                        <button onclick="startFullCloudsocSync()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs border border-slate-600 font-medium transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span>Full Tenant Ingestion</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- Stale-Only Inactivity Options Callout -->
-                <div class="stale-filter-banner bg-slate-950/70 border border-amber-900/60 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="stale-filter-banner bg-slate-950/70 border border-slate-700/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div class="flex items-center space-x-3">
                         <label class="flex items-center space-x-2 cursor-pointer">
                             <input type="checkbox" id="target-stale-only" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
-                            <span class="font-semibold text-amber-300">Import Stale Users ONLY</span>
+                            <span id="lbl-target-stale-only" class="font-medium text-slate-300">Import Stale Users ONLY</span>
                         </label>
-                        <span class="text-slate-500">|</span>
+                        <span class="text-slate-600">|</span>
                         <div class="flex items-center space-x-2">
                             <label class="text-slate-300">Inactivity Threshold:</label>
                             <input type="number" id="target-inactivity-days" value="90" min="1" max="1825" class="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-mono">
@@ -556,6 +557,50 @@
         <!-- TAB 3: USER DIRECTORY & STATE DB                               -->
         <!-- ============================================================= -->
         <section id="tab-users" class="tab-content hidden space-y-6">
+            <!-- Tab Heading & Live Directory Metrics -->
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">User Directory & Local State DB</h2>
+                    <p class="text-xs text-slate-400">Search, filter, inspect cached accounts, review AD correlation status, and stage bulk remediation actions.</p>
+                </div>
+            </div>
+
+            <!-- KPI Summary Metric Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Ingested</span>
+                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    </div>
+                    <div id="kpi-total-users" class="text-2xl font-bold text-white mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">Cached in local SQLite</span>
+                </div>
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">Active CloudSOC</span>
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    </div>
+                    <div id="kpi-active-users" class="text-2xl font-bold text-emerald-400 mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">is_active: True</span>
+                </div>
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-amber-400">Stale (>90 Days)</span>
+                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    </div>
+                    <div id="kpi-stale-users" class="text-2xl font-bold text-amber-300 mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">Inactive or Never logged in</span>
+                </div>
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-rose-400">Actions Staged</span>
+                        <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                    </div>
+                    <div id="kpi-staged-actions" class="text-2xl font-bold text-rose-300 mt-1">0</div>
+                    <span class="text-[11px] text-slate-400">Pending Execution Engine</span>
+                </div>
+            </div>
+
             <!-- Filter & Search Toolbar -->
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
@@ -645,45 +690,56 @@
             </div>
 
             <!-- Action Preparation & Bulk Staging Bar -->
-            <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
                 <div class="flex items-center space-x-3">
-                    <span class="text-slate-400 font-medium">Selected: <strong id="lbl-selected-count" class="text-blue-400">0</strong> users</span>
+                    <span class="text-slate-400 font-medium">Selected: <strong id="lbl-selected-count" class="text-blue-400 font-mono text-sm">0</strong> users</span>
                     <button onclick="selectAllVisible(true)" class="text-blue-400 hover:text-blue-300 underline text-xs">Select Visible</button>
                     <button onclick="selectAllVisible(false)" class="text-slate-400 hover:text-slate-300 underline text-xs">Clear Selection</button>
                 </div>
-                <!-- Action Buttons -->
-                <div class="flex items-center space-x-2">
-                    <span class="text-slate-500 mr-1">Stage Action:</span>
-                    <button onclick="applyBulkAction('deactivate')" class="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 rounded border border-amber-800/80 font-medium transition flex items-center gap-1">
+                <!-- Action Buttons with Contextual Disabled State -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-slate-500 mr-1 hidden sm:inline">Stage Action:</span>
+                    <button onclick="applyBulkAction('deactivate')" id="btn-bulk-deactivate" disabled class="px-3 py-1.5 bg-amber-950/60 hover:bg-amber-900 text-amber-200 rounded-lg border border-amber-800/80 font-medium transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
                         <span>Deactivate</span>
                     </button>
-                    <button onclick="applyBulkAction('move_group')" class="px-2.5 py-1 bg-purple-950 hover:bg-purple-900 text-purple-200 rounded border border-purple-800/80 font-medium transition flex items-center gap-1">
+                    <button onclick="applyBulkAction('move_group')" id="btn-bulk-move" disabled class="px-3 py-1.5 bg-purple-950/60 hover:bg-purple-900 text-purple-200 rounded-lg border border-purple-800/80 font-medium transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                         <span>Move Group</span>
                     </button>
-                    <button onclick="applyBulkAction('delete')" class="px-2.5 py-1 bg-red-950 hover:bg-red-900 text-red-200 rounded border border-red-800/80 font-medium transition flex items-center gap-1">
+                    <button onclick="applyBulkAction('delete')" id="btn-bulk-delete" disabled class="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-200 rounded-lg border border-rose-800/80 font-medium transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                         <span>Hard Delete</span>
                     </button>
-                    <button onclick="applyBulkAction('none')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 font-medium transition">
+                    <button onclick="applyBulkAction('none')" id="btn-bulk-clear" disabled class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
                         Clear Action
                     </button>
                 </div>
             </div>
 
-            <!-- Server-Side Paginated Table -->
+            <!-- Server-Side Paginated Table with Scroll Affordance Indicator -->
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <!-- Responsive Scroll Hint Bar -->
+                <div class="bg-slate-950/60 px-4 py-1.5 border-b border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                    <span class="flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                        <span>Scroll horizontally to view all columns: AD Status, Last Activity, Planned Actions, Undo</span>
+                    </span>
+                    <span class="font-mono text-slate-500">10 columns</span>
+                </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs text-slate-300">
-                        <thead class="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                    <table class="w-full text-left text-xs text-slate-300 min-w-[900px]">
+                        <thead class="bg-slate-950/90 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 sticky-table-header">
                             <tr>
                                 <th class="py-3 px-3 w-8">
                                     <input type="checkbox" id="chk-header" onchange="toggleSelectAllHeader(this)" class="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0">
                                 </th>
-                                <th class="py-3 px-3">User Email / CloudSOC ID</th>
+                                <th class="py-3 px-3">User Email / ID</th>
                                 <th class="py-3 px-3">Name</th>
-                                <th class="py-3 px-3">Role / Privileges</th>
+                                <th class="py-3 px-3">Role</th>
                                 <th class="py-3 px-3">Secondary ID</th>
                                 <th class="py-3 px-3">CloudSOC</th>
-                                <th class="py-3 px-3">Active Directory (AD)</th>
+                                <th class="py-3 px-3">Active Directory</th>
                                 <th class="py-3 px-3">Last Activity</th>
                                 <th class="py-3 px-3">Planned Action</th>
                                 <th class="py-3 px-3">Actions</th>
@@ -715,32 +771,48 @@
         <!-- TAB 4: EXECUTION ENGINE                                       -->
         <!-- ============================================================= -->
         <section id="tab-execution" class="tab-content hidden space-y-6">
-            <!-- Queue Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                    <span class="text-xs font-semibold uppercase text-amber-400">Queued Deactivate</span>
-                    <div id="exec-summary-deactivate" class="text-2xl font-bold text-white mt-1">0</div>
-                    <span class="text-[11px] text-slate-400">Users to disable in CloudSOC</span>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                    <span class="text-xs font-semibold uppercase text-purple-400">Queued Move Group</span>
-                    <div id="exec-summary-move" class="text-2xl font-bold text-white mt-1">0</div>
-                    <span class="text-[11px] text-slate-400">Move to Pending_Deletion</span>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                    <span class="text-xs font-semibold uppercase text-rose-400">Queued Hard Delete</span>
-                    <div id="exec-summary-delete" class="text-2xl font-bold text-white mt-1">0</div>
-                    <span class="text-[11px] text-slate-400">Permanent deletion (CONFIRM needed)</span>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                    <span class="text-xs font-semibold uppercase text-blue-400">Total Pending</span>
-                    <div id="exec-summary-total" class="text-2xl font-bold text-white mt-1">0</div>
-                    <span class="text-[11px] text-slate-400">Candidates in execution queue</span>
+            <!-- Section Header -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Execution Engine & Action Dispatcher</h2>
+                    <p class="text-xs text-slate-400">Review queued staging actions, configure safety boundaries, run simulated dry-runs, and execute live CloudSOC modifications.</p>
                 </div>
             </div>
 
-            <!-- Role Guard Safety Configuration -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+            <!-- Queue Summary Cards with Harmonized Heights -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <span class="text-xs font-semibold uppercase text-amber-400 tracking-wider">Queued Deactivate</span>
+                        <div id="exec-summary-deactivate" class="text-2xl font-bold text-white mt-1">0</div>
+                    </div>
+                    <span class="text-[11px] text-slate-400 mt-2 block">Users to disable in CloudSOC</span>
+                </div>
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <span class="text-xs font-semibold uppercase text-purple-300 tracking-wider">Queued Move Group</span>
+                        <div id="exec-summary-move" class="text-2xl font-bold text-white mt-1">0</div>
+                    </div>
+                    <span class="text-[11px] text-slate-400 mt-2 block">Move to Pending_Deletion</span>
+                </div>
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <span class="text-xs font-semibold uppercase text-rose-400 tracking-wider">Queued Hard Delete</span>
+                        <div id="exec-summary-delete" class="text-2xl font-bold text-white mt-1">0</div>
+                    </div>
+                    <span class="text-[11px] text-slate-400 mt-2 block">Permanent deletion (Requires CONFIRM)</span>
+                </div>
+                <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <span class="text-xs font-semibold uppercase text-blue-400 tracking-wider">Total Pending</span>
+                        <div id="exec-summary-total" class="text-2xl font-bold text-white mt-1">0</div>
+                    </div>
+                    <span class="text-[11px] text-slate-400 mt-2 block">Candidates in execution queue</span>
+                </div>
+            </div>
+
+            <!-- Role Guard Safety Configuration with Multi-line Textareas -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-sm">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div>
                         <h3 class="text-sm font-semibold text-white flex items-center gap-2">
@@ -752,7 +824,7 @@
                         </h3>
                         <p class="text-xs text-slate-400">Guarantees that privileged administrator accounts are never deleted or modified regardless of filter conditions.</p>
                     </div>
-                    <button onclick="saveRoleGuardConfig()" id="btn-save-role-guard" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition">
+                    <button onclick="saveRoleGuardConfig()" id="btn-save-role-guard" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition shadow-sm">
                         Save Role Guard Settings
                     </button>
                 </div>
@@ -763,42 +835,42 @@
                     </div>
                     <div>
                         <label class="block text-slate-400 font-medium mb-1">Protected Roles (comma-separated)</label>
-                        <input type="text" id="cfg-protected-roles" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200 font-mono text-xs">
+                        <textarea id="cfg-protected-roles" rows="3" placeholder="admin, super admin, tenant admin" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 font-mono text-xs resize-y focus:outline-none focus:border-blue-500"></textarea>
                     </div>
                     <div>
                         <label class="block text-slate-400 font-medium mb-1">Protected Groups (comma-separated)</label>
-                        <input type="text" id="cfg-protected-groups" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-200 font-mono text-xs">
+                        <textarea id="cfg-protected-groups" rows="3" placeholder="Domain Admins, Enterprise Admins, Builtin" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 font-mono text-xs resize-y focus:outline-none focus:border-blue-500"></textarea>
                     </div>
                 </div>
             </div>
 
-            <!-- Execution Control Bar -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+            <!-- Execution Control Bar with Clear Visual Hierarchy -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-sm">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center space-x-3">
                         <span class="text-sm font-semibold text-white">Execution Control:</span>
-                        <span id="exec-state-badge" class="px-2.5 py-1 text-xs rounded-full bg-slate-800 text-slate-400 font-mono font-medium">State: IDLE</span>
+                        <span id="exec-state-badge" class="px-2.5 py-1 text-xs rounded-full bg-slate-800 text-slate-400 font-mono font-medium border border-slate-700">State: IDLE</span>
                         <span id="exec-mode-badge" class="px-2.5 py-1 text-xs rounded-full bg-blue-950 text-blue-400 border border-blue-800 font-mono">Mode: -</span>
                     </div>
-                    <div class="flex items-center space-x-2">
-                        <button onclick="startExecution('dry_run')" id="btn-exec-dryrun" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="startExecution('dry_run')" id="btn-exec-dryrun" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                             <span>Start Dry-Run</span>
                         </button>
-                        <button onclick="requestLiveExecution()" id="btn-exec-live" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold shadow transition flex items-center gap-1.5">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <button onclick="requestLiveExecution()" id="btn-exec-live" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold shadow transition flex items-center gap-1.5 ring-1 ring-amber-400/40">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                             <span>Start Live Execution</span>
                         </button>
-                        <button onclick="pauseExecution()" id="btn-exec-pause" class="px-3 py-1.5 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded text-xs font-medium transition">
+                        <button onclick="pauseExecution()" id="btn-exec-pause" disabled class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
                             Pause
                         </button>
-                        <button onclick="resumeExecution()" id="btn-exec-resume" class="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded text-xs font-medium transition">
+                        <button onclick="resumeExecution()" id="btn-exec-resume" disabled class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
                             Resume
                         </button>
-                        <button onclick="stopExecution()" id="btn-exec-stop" class="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded text-xs font-medium transition">
+                        <button onclick="stopExecution()" id="btn-exec-stop" disabled class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
                             Stop
                         </button>
-                        <button onclick="retryFailedExecution()" id="btn-exec-retry" class="px-3 py-1.5 bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800 rounded text-xs font-medium transition">
+                        <button onclick="retryFailedExecution()" id="btn-exec-retry" class="px-3 py-1.5 bg-purple-950/70 hover:bg-purple-900 text-purple-200 border border-purple-800/80 rounded-lg text-xs font-medium transition">
                             Retry Failed
                         </button>
                     </div>
@@ -843,14 +915,17 @@
                     <p class="text-xs text-slate-400">Historical records of execution runs, rate-limiting backoffs, and exportable compliance audit logs.</p>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button onclick="cleanLogsOlderThan(7)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded text-xs border border-slate-700 transition">
+                    <button onclick="cleanLogsOlderThan(7)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg text-xs border border-slate-700 transition">
                         Clean Logs > 7 Days
                     </button>
-                    <button onclick="cleanAllLogs()" class="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 rounded text-xs border border-rose-800 transition">
-                        Clear All Logs
+                    <button onclick="refreshLogs(); loadExecutionRuns();" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs border border-slate-700 transition flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span>Refresh</span>
                     </button>
-                    <button onclick="refreshLogs(); loadExecutionRuns();" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs border border-slate-700 transition">
-                        Refresh
+                    <div class="h-4 w-px bg-slate-800 mx-1"></div>
+                    <button onclick="cleanAllLogs()" class="px-3 py-1.5 bg-rose-950/70 hover:bg-rose-900 text-rose-300 rounded-lg text-xs border border-rose-800/80 transition flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        <span>Clear All Logs</span>
                     </button>
                 </div>
             </div>
@@ -885,8 +960,15 @@
             </div>
 
             <!-- Real-time Log Stream -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-hidden">
-                <div id="logs-container" class="space-y-1.5 max-h-[500px] overflow-y-auto pr-2">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-hidden shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                        <h3 class="text-xs font-semibold uppercase text-slate-300 tracking-wider">Live System Activity & Audit Trail</h3>
+                    </div>
+                    <span class="text-[11px] text-slate-500 font-sans">Auto-updating feed</span>
+                </div>
+                <div id="logs-container" class="space-y-1 max-h-[450px] overflow-y-auto pr-2">
                     <div class="text-slate-500 italic">No logs recorded yet.</div>
                 </div>
             </div>

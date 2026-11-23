@@ -702,15 +702,37 @@ async function fetchSyncStatus() {
 
         const btnPause = document.getElementById("btn-sync-pause");
         const btnResume = document.getElementById("btn-sync-resume");
+        const btnCancel = document.getElementById("btn-sync-cancel");
+
+        if (btnCancel) {
+            btnCancel.disabled = !data.is_running;
+            btnCancel.classList.toggle("opacity-40", !data.is_running);
+            btnCancel.classList.toggle("cursor-not-allowed", !data.is_running);
+        }
 
         if (data.is_running) {
             if (data.is_paused) {
                 if (btnPause) btnPause.classList.add("hidden");
-                if (btnResume) btnResume.classList.remove("hidden");
+                if (btnResume) {
+                    btnResume.classList.remove("hidden");
+                    btnResume.disabled = false;
+                    btnResume.classList.remove("opacity-40", "cursor-not-allowed");
+                }
             } else {
-                if (btnPause) btnPause.classList.remove("hidden");
+                if (btnPause) {
+                    btnPause.classList.remove("hidden");
+                    btnPause.disabled = false;
+                    btnPause.classList.remove("opacity-40", "cursor-not-allowed");
+                }
                 if (btnResume) btnResume.classList.add("hidden");
             }
+        } else {
+            if (btnPause) {
+                btnPause.classList.remove("hidden");
+                btnPause.disabled = true;
+                btnPause.classList.add("opacity-40", "cursor-not-allowed");
+            }
+            if (btnResume) btnResume.classList.add("hidden");
         }
     } catch (e) {
         // Silent fail
@@ -875,6 +897,11 @@ async function loadUsers(page = 1) {
         document.getElementById("lbl-total-users").innerText = data.total;
         document.getElementById("lbl-current-page").innerText = `Page ${page} of ${data.total_pages || 1}`;
 
+        // Update User Directory KPI Metric Cards
+        const kpiTotal = document.getElementById("kpi-total-users");
+        if (kpiTotal) kpiTotal.innerText = data.total.toLocaleString();
+        loadDirectoryKPIMetrics();
+
         document.getElementById("btn-prev-page").disabled = (page <= 1);
         document.getElementById("btn-next-page").disabled = (page >= data.total_pages);
 
@@ -883,33 +910,33 @@ async function loadUsers(page = 1) {
             tr.className = "hover:bg-slate-800/40 transition";
 
             const csBadge = u.is_active
-                ? '<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800">Active</span>'
-                : '<span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700">Inactive</span>';
+                ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 whitespace-nowrap">Active</span>'
+                : '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700 whitespace-nowrap">Inactive</span>';
 
-            let adBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">Unchecked</span>';
+            let adBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 whitespace-nowrap">Unchecked</span>';
             if (u.ad_status === "Active") {
-                adBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800">Active</span>';
+                adBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 whitespace-nowrap">Active</span>';
             } else if (u.ad_status === "Disabled") {
-                adBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-amber-950 text-amber-300 border border-amber-800">Disabled</span>';
+                adBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-950 text-amber-300 border border-amber-800 whitespace-nowrap">Disabled</span>';
             } else if (u.ad_status === "NotFound") {
-                adBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-800 font-semibold">NotFound</span>';
+                adBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-800 font-semibold whitespace-nowrap">NotFound</span>';
             } else if (u.ad_status === "Error") {
-                adBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-400 border border-rose-900">Error (Lock)</span>';
+                adBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-400 border border-rose-900 whitespace-nowrap">Error (Lock)</span>';
             }
 
             let actBadge = '<span class="text-slate-500">-</span>';
             if (u.selected_action === "deactivate") {
-                actBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-amber-950 text-amber-300 border border-amber-800 font-medium">Deactivate</span>';
+                actBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-950 text-amber-300 border border-amber-800 font-medium whitespace-nowrap">Deactivate</span>';
             } else if (u.selected_action === "move_group") {
-                actBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-purple-950 text-purple-300 border border-purple-800 font-medium">Move Group</span>';
+                actBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-purple-950 text-purple-300 border border-purple-800 font-medium whitespace-nowrap">Move Group</span>';
             } else if (u.selected_action === "delete") {
-                actBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-800 font-semibold">Delete</span>';
+                actBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-800 font-semibold whitespace-nowrap">Delete</span>';
             }
 
             const isPrivileged = !!u.is_privileged;
-            let roleBadge = `<span class="text-slate-400">${u.role || 'End User'}</span>`;
+            let roleBadge = `<span class="text-slate-400 whitespace-nowrap">${u.role || 'End User'}</span>`;
             if (isPrivileged) {
-                roleBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-800 font-bold" title="Role Guard Active: Account protected from staging or deletion">
+                roleBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-800 font-semibold whitespace-nowrap" title="Role Guard Active: Account protected from staging or deletion">
                     🛡️ ${u.role || 'Admin'}
                     <span class="bg-rose-900/90 text-rose-200 px-1 py-0.2 rounded text-[9px]">Exception</span>
                 </span>`;
@@ -919,9 +946,15 @@ async function loadUsers(page = 1) {
 
             let undoBtn = '';
             if (u.action_status === 'completed' && u.selected_action === 'deactivate') {
-                undoBtn = `<button onclick="performUndo(${u.id}, 'soft')" class="px-2 py-0.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded text-[10px]">Undo</button>`;
+                undoBtn = `<button onclick="performUndo(${u.id}, 'soft')" class="px-2 py-0.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded text-[10px] whitespace-nowrap transition">Undo</button>`;
             } else if (u.action_status === 'completed' && u.selected_action === 'delete') {
-                undoBtn = `<button onclick="performUndo(${u.id}, 'hard')" class="px-2 py-0.5 bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800 rounded text-[10px]">Hard Undo</button>`;
+                undoBtn = `<button onclick="performUndo(${u.id}, 'hard')" class="px-2 py-0.5 bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800 rounded text-[10px] whitespace-nowrap transition">Hard Undo</button>`;
+            }
+
+            // Clean formatted activity date without microseconds
+            let displayActivity = u.last_activity_date || 'Never / Blank';
+            if (displayActivity !== 'Never / Blank' && displayActivity.includes('.')) {
+                displayActivity = displayActivity.split('.')[0];
             }
 
             const isChecked = !isPrivileged && selectedUserIds.has(u.id);
@@ -937,14 +970,14 @@ async function loadUsers(page = 1) {
                     <div class="font-medium text-slate-200">${u.email}</div>
                     <div class="text-[10px] text-slate-500 font-mono">${u.cloudsoc_id || '-'}</div>
                 </td>
-                <td class="py-2 px-3 text-slate-300">${u.first_name || ''} ${u.last_name || ''}</td>
-                <td class="py-2 px-3">${roleBadge}</td>
-                <td class="py-2 px-3 text-slate-400 font-mono text-[11px]">${u.secondary_user_id || '-'}</td>
-                <td class="py-2 px-3">${csBadge}</td>
-                <td class="py-2 px-3">${adBadge}</td>
-                <td class="py-2 px-3 text-slate-400">${u.last_activity_date || 'Never / Blank'}</td>
-                <td class="py-2 px-3">${actBadge}</td>
-                <td class="py-2 px-3">${undoBtn}</td>
+                <td class="py-2.5 px-3 text-slate-300 text-xs whitespace-nowrap">${u.first_name || ''} ${u.last_name || ''}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">${roleBadge}</td>
+                <td class="py-2.5 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">${u.secondary_user_id || '-'}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">${csBadge}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">${adBadge}</td>
+                <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap font-mono text-[11px]">${displayActivity}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">${actBadge}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">${undoBtn}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -978,8 +1011,52 @@ function selectAllVisible(selectAll) {
 }
 
 function updateSelectedCount() {
+    const count = selectedUserIds.size;
     const el = document.getElementById("lbl-selected-count");
-    if (el) el.innerText = selectedUserIds.size;
+    if (el) el.innerText = count;
+
+    // Contextually enable/disable staging action buttons
+    const btnDeact = document.getElementById("btn-bulk-deactivate");
+    const btnMove = document.getElementById("btn-bulk-move");
+    const btnDel = document.getElementById("btn-bulk-delete");
+    const btnClear = document.getElementById("btn-bulk-clear");
+
+    const hasSelection = count > 0;
+    [btnDeact, btnMove, btnDel, btnClear].forEach(btn => {
+        if (btn) {
+            btn.disabled = !hasSelection;
+            btn.classList.toggle("opacity-40", !hasSelection);
+            btn.classList.toggle("cursor-not-allowed", !hasSelection);
+        }
+    });
+}
+
+async function loadDirectoryKPIMetrics() {
+    try {
+        const res = await fetch("/api/stats/stale-breakdown");
+        const data = await res.json();
+        
+        const elTotal = document.getElementById("kpi-total-users");
+        const elActive = document.getElementById("kpi-active-users");
+        const elStale = document.getElementById("kpi-stale-users");
+        const elStaged = document.getElementById("kpi-staged-actions");
+
+        if (data.total_users !== undefined && elTotal) {
+            elTotal.innerText = data.total_users.toLocaleString();
+        }
+        if (data.total_users !== undefined && data.cloudsoc_inactive !== undefined && elActive) {
+            const activeCount = Math.max(0, data.total_users - data.cloudsoc_inactive);
+            elActive.innerText = activeCount.toLocaleString();
+        }
+        if (data.inactive_90d_or_blank !== undefined && elStale) {
+            elStale.innerText = data.inactive_90d_or_blank.toLocaleString();
+        }
+        if (data.queued_actions && elStaged) {
+            elStaged.innerText = (data.queued_actions.total_pending || 0).toLocaleString();
+        }
+    } catch (e) {
+        // Silently ignore KPI refresh failure
+    }
 }
 
 async function applyBulkAction(action) {
@@ -1080,6 +1157,43 @@ async function fetchExecutionStatus() {
         const ticker = document.getElementById("exec-ticker");
         if (ticker) ticker.innerText = data.message || "Idle";
 
+        // Dynamic Execution Button State Controls
+        const btnDryRun = document.getElementById("btn-exec-dryrun");
+        const btnLive = document.getElementById("btn-exec-live");
+        const btnPause = document.getElementById("btn-exec-pause");
+        const btnResume = document.getElementById("btn-exec-resume");
+        const btnStop = document.getElementById("btn-exec-stop");
+
+        const isRunning = (data.state === "running");
+        const isPaused = (data.state === "paused" || data.state === "awaiting_reauth");
+        const isBusy = isRunning || isPaused;
+
+        if (btnDryRun) {
+            btnDryRun.disabled = isBusy;
+            btnDryRun.classList.toggle("opacity-40", isBusy);
+            btnDryRun.classList.toggle("cursor-not-allowed", isBusy);
+        }
+        if (btnLive) {
+            btnLive.disabled = isBusy;
+            btnLive.classList.toggle("opacity-40", isBusy);
+            btnLive.classList.toggle("cursor-not-allowed", isBusy);
+        }
+        if (btnPause) {
+            btnPause.disabled = !isRunning;
+            btnPause.classList.toggle("opacity-40", !isRunning);
+            btnPause.classList.toggle("cursor-not-allowed", !isRunning);
+        }
+        if (btnResume) {
+            btnResume.disabled = !isPaused;
+            btnResume.classList.toggle("opacity-40", !isPaused);
+            btnResume.classList.toggle("cursor-not-allowed", !isPaused);
+        }
+        if (btnStop) {
+            btnStop.disabled = !isBusy;
+            btnStop.classList.toggle("opacity-40", !isBusy);
+            btnStop.classList.toggle("cursor-not-allowed", !isBusy);
+        }
+
         const reauthBanner = document.getElementById("reauth-banner");
         if (reauthBanner) {
             if (data.state === "awaiting_reauth") reauthBanner.classList.remove("hidden");
@@ -1093,8 +1207,13 @@ async function fetchExecutionStatus() {
                 data.recent_logs.forEach(l => {
                     const row = document.createElement("div");
                     const color = l.level === "ERROR" ? "text-rose-400" : (l.level === "WARNING" ? "text-amber-400" : "text-slate-300");
-                    row.className = `py-0.5 ${color}`;
-                    row.innerText = `[${l.timestamp.split("T")[1] || l.timestamp}] [${l.level}] ${l.user_email ? '[' + l.user_email + '] ' : ''}${l.message}`;
+                    row.className = `py-0.5 ${color} whitespace-pre-wrap break-all`;
+
+                    let ts = l.timestamp || '';
+                    if (ts.includes('.')) ts = ts.split('.')[0];
+                    if (ts.includes('T')) ts = ts.split('T')[1];
+
+                    row.innerText = `[${ts}] [${l.level}] ${l.user_email ? '[' + l.user_email + '] ' : ''}${l.message}`;
                     consoleEl.appendChild(row);
                 });
             }
@@ -1327,21 +1446,49 @@ async function loadExecutionRuns() {
         data.runs.forEach(r => {
             const tr = document.createElement("tr");
             tr.className = "hover:bg-slate-800/40 transition";
+
+            // Status Badge with realistic semantics: if completed with 100% failures, show red Failed
+            let statusBadgeClass = "bg-slate-800 text-slate-400";
+            let statusText = r.status || "unknown";
+
+            if (r.status === "completed") {
+                if (r.failed_count > 0 && r.success_count === 0 && r.skipped_count === 0) {
+                    statusBadgeClass = "bg-rose-950 text-rose-400 border border-rose-800";
+                    statusText = "failed";
+                } else if (r.failed_count > 0) {
+                    statusBadgeClass = "bg-amber-950 text-amber-300 border border-amber-800";
+                    statusText = "partial";
+                } else {
+                    statusBadgeClass = "bg-emerald-950 text-emerald-400 border border-emerald-800";
+                    statusText = "completed";
+                }
+            } else if (r.status === "running") {
+                statusBadgeClass = "bg-blue-950 text-blue-400 border border-blue-800 animate-pulse";
+            }
+
+            // Clean ISO Timestamp without microseconds
+            let displayTime = r.start_time || '-';
+            if (displayTime.includes('.')) {
+                displayTime = displayTime.split('.')[0].replace('T', ' ');
+            } else if (displayTime.includes('T')) {
+                displayTime = displayTime.replace('T', ' ');
+            }
+
             tr.innerHTML = `
-                <td class="py-2.5 px-3 font-bold text-white">#${r.id}</td>
-                <td class="py-2.5 px-3 uppercase text-blue-400 font-semibold">${r.run_mode}</td>
-                <td class="py-2.5 px-3">
-                    <span class="px-2 py-0.5 rounded text-[10px] ${r.status === 'completed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : (r.status === 'running' ? 'bg-blue-950 text-blue-400 border border-blue-800' : 'bg-slate-800 text-slate-400')} font-medium">
-                        ${r.status}
+                <td class="py-2.5 px-3 font-bold text-white whitespace-nowrap">#${r.id}</td>
+                <td class="py-2.5 px-3 uppercase text-blue-400 font-semibold whitespace-nowrap">${r.run_mode}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] ${statusBadgeClass} font-medium">
+                        ${statusText}
                     </span>
                 </td>
-                <td class="py-2.5 px-3 text-slate-300">${r.total_candidates}</td>
-                <td class="py-2.5 px-3 text-emerald-400 font-semibold">${r.success_count}</td>
-                <td class="py-2.5 px-3 text-amber-400">${r.skipped_count}</td>
-                <td class="py-2.5 px-3 text-rose-400">${r.failed_count}</td>
-                <td class="py-2.5 px-3 text-slate-400">${r.start_time || '-'}</td>
-                <td class="py-2.5 px-3">
-                    <a href="/api/execution/runs/${r.id}/export" download class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs transition inline-flex items-center gap-1">
+                <td class="py-2.5 px-3 text-slate-300 whitespace-nowrap">${r.total_candidates}</td>
+                <td class="py-2.5 px-3 text-emerald-400 font-semibold whitespace-nowrap">${r.success_count}</td>
+                <td class="py-2.5 px-3 text-amber-400 whitespace-nowrap">${r.skipped_count}</td>
+                <td class="py-2.5 px-3 text-rose-400 whitespace-nowrap">${r.failed_count}</td>
+                <td class="py-2.5 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">${displayTime}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">
+                    <a href="/api/execution/runs/${r.id}/export" download class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-xs transition inline-flex items-center gap-1 shadow-sm">
                         <span>📥 Export CSV</span>
                     </a>
                 </td>
@@ -1369,8 +1516,18 @@ async function refreshLogs() {
         data.recent_logs.forEach(l => {
             const div = document.createElement("div");
             const color = l.level === "ERROR" ? "text-rose-400" : (l.level === "WARNING" ? "text-amber-400" : "text-slate-300");
-            div.className = `py-0.5 ${color}`;
-            div.innerText = `[${l.timestamp}] [${l.level}] ${l.user_email ? '[' + l.user_email + '] ' : ''}${l.message}`;
+            div.className = `py-0.5 ${color} whitespace-pre-wrap break-all`;
+
+            // Clean ISO Timestamp without microseconds
+            let ts = l.timestamp || '';
+            if (ts.includes('.')) {
+                ts = ts.split('.')[0];
+            }
+            if (ts.includes('T')) {
+                ts = ts.split('T')[1];
+            }
+
+            div.innerText = `[${ts}] [${l.level}] ${l.user_email ? '[' + l.user_email + '] ' : ''}${l.message}`;
             container.appendChild(div);
         });
     } catch (e) {
