@@ -19,11 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mail Only`
   - `Custom Active Directory Attribute` (e.g. `employeeID`)
 - **Standalone Domain NetBIOS Username Extraction:** In standalone domain environments (LDAP 389 / LDAPS 636), strips the `DOMAIN\` prefix from NetBIOS identities (`DOMAIN\USER` $\rightarrow$ `USER`) to query `(sAMAccountName=USER)`.
+- **Role Safety Guard in Cleanup Plan Builder:** Relocated the Role Safety Guard configuration card directly into the Cleanup Plan Builder for continuous visibility and administrative control over privileged accounts.
+- **Role Guard Triage Filter:** Added a dedicated filter dropdown (`#filter-role-guard`) offering `All Users`, `Exclude Protected Admins (Cleanup Focus)`, and `Protected Admins Only`.
+- **Plan Reset Controls:** Added toolbar action buttons with safety confirmations:
+  - `↺ Unstage Actions`: Soft reset clearing all staged actions (`selected_action = 'none'`) while preserving user profiles and AD check statuses.
+  - `🗑️ Purge DB`: Clean-slate reset deleting all cached user records while strictly preserving compliance run history and audit logs.
+- **Single Candidate Removal:** Added inline remove button (`✕`) on every user row to remove individual candidates from the local cleanup plan database without API impact.
 - **Cleanup Plan Export to CSV:** Direct CSV download link (`/api/plan/export`) in the Cleanup Plan Builder toolbar to save the current plan for audit, approval, or backup.
 - **CSV Plan Restore Mode:** Channel 3 (CSV File Ingestion) now features a dual-mode selector:
   - *Option A: Import Raw Users* (standard user accounts for triage)
   - *Option B: Restore Saved Cleanup Plan* (re-ingests users and restores their staged actions and AD check statuses).
 - **Custom CSV File Upload:** Direct file upload endpoint (`/api/sync/csv/upload`) allowing operators to upload and import any raw user list or saved cleanup plan.
+
+### Fixed
+- **LDAP Safety Check Loop Instantiation Bug:** Fixed `TypeError: LDAPSyncEngine.__init__() got an unexpected keyword argument 'host'` inside `_run_ldap_sync` by properly mapping connection parameters to `manual_host` and `forests`.
+- **SysAdmin Exception Role Classification:** Corrected privileged user role classification so that `sysadmin` accounts and email prefixes are explicitly badged as `🛡️ SysAdmin Exception` rather than generic `End User Exception`.
+- **Escaped Bug Test Coverage:** Added comprehensive automated regression tests covering `_run_ldap_sync` instantiation, role classification, plan resets, single candidate deletions, and CSV export. Master test suite expanded to 56 tests (100% pass rate).
 
 ---
 

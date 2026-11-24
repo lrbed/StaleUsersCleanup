@@ -426,7 +426,6 @@ class SyncService:
 
         try:
             ldap_engine = LDAPSyncEngine(
-                host=cfg.get("ad_host", ""),
                 manual_host=cfg.get("ad_host", ""),
                 manual_port=int(cfg.get("ad_port", 389)),
                 manual_base_dn=cfg.get("ad_base_dn", ""),

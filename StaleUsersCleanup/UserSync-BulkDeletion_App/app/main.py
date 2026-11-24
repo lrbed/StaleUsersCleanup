@@ -546,6 +546,29 @@ def export_cleanup_plan():
     )
 
 
+@app.route("/api/plan/reset", methods=["POST"])
+def reset_plan():
+    """Reset cleanup plan (unstage actions or complete database purge)."""
+    from app.database import reset_cleanup_plan
+    data = request.get_json() or {}
+    mode = data.get("mode", "staged_only").lower()
+    count = reset_cleanup_plan(mode=mode, db_path=DEFAULT_DB_PATH)
+    return jsonify({
+        "success": True,
+        "mode": mode,
+        "affected_count": count,
+        "message": "All staged actions cleared" if mode == "staged_only" else f"Database purged ({count} users removed)"
+    })
+
+
+@app.route("/api/users/<int:user_id>", methods=["DELETE"])
+def remove_single_user(user_id):
+    """Remove a single user candidate from local cleanup database."""
+    from app.database import delete_single_user
+    ok = delete_single_user(user_id, db_path=DEFAULT_DB_PATH)
+    return jsonify({"success": ok})
+
+
 @app.route("/api/sync/pause", methods=["POST"])
 def pause_sync():
     ok = sync_service.pause()
@@ -765,6 +788,7 @@ def get_users():
     inactivity_mode = request.args.get("inactivity_mode", "").strip().lower()
     inactivity_days = request.args.get("inactivity_days", "").strip()
     selected_action = request.args.get("selected_action", "").strip()
+    role_guard = request.args.get("role_guard", "").strip().lower()
     sort_by = request.args.get("sort_by", "id").strip().lower()
     sort_dir = request.args.get("sort_dir", "asc").strip().lower()
 
@@ -826,7 +850,13 @@ def get_users():
         query += " AND selected_action = ?"
         params.append(selected_action)
 
-    # 10. Compound Stale condition (FILT-05)
+    # 10. Role Guard filter (All, Exclude Admins, Admins Only)
+    if role_guard == "exclude_admins":
+        query += " AND is_privileged = 0"
+    elif role_guard == "admins_only":
+        query += " AND is_privileged = 1"
+
+    # 11. Compound Stale condition (FILT-05)
     if stale_only:
         stale_cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d %H:%M:%S")
         query += " AND (ad_status IN ('Disabled', 'NotFound') OR is_active = 0 OR last_activity_date IS NULL OR TRIM(last_activity_date) = '' OR last_activity_date < ?)"

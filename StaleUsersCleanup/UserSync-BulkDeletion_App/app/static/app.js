@@ -999,6 +999,7 @@ async function loadUsers(page = 1) {
         group: document.getElementById("filter-group").value,
         is_active: document.getElementById("filter-is-active").value,
         selected_action: document.getElementById("filter-selected-action").value,
+        role_guard: document.getElementById("filter-role-guard")?.value || "",
         sort_by: currentSortBy,
         sort_dir: currentSortDir
     });
@@ -1062,8 +1063,12 @@ async function loadUsers(page = 1) {
             const isPrivileged = !!u.is_privileged;
             let roleBadge = `<span class="text-slate-400 whitespace-nowrap">${u.role || 'End User'}</span>`;
             if (isPrivileged) {
+                let displayRole = u.role || 'Admin';
+                if (displayRole.toLowerCase() === 'end user') {
+                    displayRole = 'Admin';
+                }
                 roleBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300 border border-rose-800 font-semibold whitespace-nowrap" title="Role Guard Active: Account protected from staging or deletion">
-                    🛡️ ${u.role || 'Admin'}
+                    🛡️ ${displayRole}
                     <span class="bg-rose-900/90 text-rose-200 px-1 py-0.2 rounded text-[9px]">Exception</span>
                 </span>`;
                 // Ensure privileged users are never selected
@@ -1076,6 +1081,8 @@ async function loadUsers(page = 1) {
             } else if (u.action_status === 'completed' && u.selected_action === 'delete') {
                 undoBtn = `<button onclick="performUndo(${u.id}, 'hard')" class="px-2 py-0.5 bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800 rounded text-[10px] whitespace-nowrap transition">Hard Undo</button>`;
             }
+
+            const removeBtn = `<button onclick="removeSingleUserCandidate(${u.id}, '${u.email}')" class="text-slate-500 hover:text-rose-400 text-[11px] p-1 transition" title="Remove user candidate from local cleanup database">✕</button>`;
 
             // Clean formatted activity date without microseconds
             let displayActivity = u.last_activity_date || 'Never / Blank';
@@ -1103,7 +1110,12 @@ async function loadUsers(page = 1) {
                 <td class="py-2.5 px-3 whitespace-nowrap">${adBadge}</td>
                 <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap font-mono text-[11px]">${displayActivity}</td>
                 <td class="py-2.5 px-3 whitespace-nowrap">${actBadge}</td>
-                <td class="py-2.5 px-3 whitespace-nowrap">${undoBtn}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">
+                    <div class="flex items-center gap-1.5">
+                        ${undoBtn}
+                        ${removeBtn}
+                    </div>
+                </td>
             `;
             tbody.appendChild(tr);
         });
@@ -1497,11 +1509,69 @@ async function saveRoleGuardConfig() {
         const data = await res.json();
         if (data.success) {
             alert("Role Guard configuration saved successfully.");
+            loadUsers(currentPage);
         } else {
             alert("Failed to save Role Guard: " + (data.error || "Unknown"));
         }
     } catch (e) {
         alert("Error saving Role Guard: " + e.message);
+    }
+}
+
+// -------------------------------------------------------------
+// PLAN RESET & SINGLE USER REMOVAL
+// -------------------------------------------------------------
+async function resetPlanPrompt(mode) {
+    let confirmMsg = "";
+    if (mode === "staged_only") {
+        confirmMsg = "Unstage Actions: Are you sure you want to reset all planned actions to 'none'?\n\n(Imported users and AD status will be preserved).";
+    } else if (mode === "purge_all") {
+        confirmMsg = "WARNING - PURGE DATABASE:\n\nAre you sure you want to remove ALL users from the local cleanup plan database?\n\n(Execution run history and audit logs will be safely preserved).";
+    } else {
+        return;
+    }
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const res = await fetch("/api/plan/reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: mode })
+        });
+        const data = await res.json();
+        if (data.success) {
+            selectedUserIds.clear();
+            const selectAll = document.getElementById("select-all-users");
+            if (selectAll) selectAll.checked = false;
+            updateSelectedCount();
+            await loadStats();
+            await loadUsers(1);
+            alert(data.message || "Plan reset completed.");
+        } else {
+            alert("Failed to reset plan: " + (data.error || "Unknown"));
+        }
+    } catch (e) {
+        alert("Error during plan reset: " + e.message);
+    }
+}
+
+async function removeSingleUserCandidate(userId, email) {
+    if (!confirm(`Remove "${email}" from the cleanup plan?`)) return;
+
+    try {
+        const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) {
+            selectedUserIds.delete(userId);
+            updateSelectedCount();
+            await loadStats();
+            await loadUsers(currentPage);
+        } else {
+            alert("Failed to remove user: " + (data.error || "Unknown error"));
+        }
+    } catch (e) {
+        alert("Error removing user: " + e.message);
     }
 }
 

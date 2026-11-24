@@ -16,11 +16,14 @@ from app.database import (
     set_users_action,
     create_execution_run,
     get_all_interrupted_runs,
-    dismiss_interrupted_run
+    dismiss_interrupted_run,
+    reset_cleanup_plan,
+    delete_single_user,
+    add_log
 )
 from app.config import save_config, load_config
 from app.ldap_client import LDAPSyncEngine
-from app.sync_service import matches_criteria
+from app.sync_service import matches_criteria, SyncService
 from app.execution_service import ExecutionService
 from app.main import app
 import app.main as main_module
@@ -412,6 +415,218 @@ class TestEnterpriseEnhancements(unittest.TestCase):
         # Verify search filter had sAMAccountName=jdoe
         search_call_args = mock_conn.search.call_args[1]
         self.assertIn("(sAMAccountName=jdoe)", search_call_args["search_filter"])
+
+    # -----------------------------------------------------------------
+    # 8. REGRESSION & NEW FEATURE COVERAGE:
+    #    - LDAPSyncEngine Instantiation in SyncService (No spurious 'host' kwarg)
+    #    - Role Safety Guard (SysAdmin Classification & API Filtering)
+    #    - Cleanup Plan Reset (staged_only & purge_all)
+    #    - Single User Candidate Removal
+    #    - Export Plan CSV Endpoint
+    # -----------------------------------------------------------------
+    @patch("app.sync_service.LDAPSyncEngine")
+    def test_run_ldap_sync_engine_instantiation_no_spurious_host_kwarg(self, mock_engine_cls):
+        """
+        Escaped bug regression test:
+        Ensure SyncService._run_ldap_sync does NOT pass 'host' to LDAPSyncEngine.__init__,
+        which previously triggered TypeError: LDAPSyncEngine.__init__() got an unexpected keyword argument 'host'.
+        """
+        mock_instance = MagicMock()
+        mock_instance.get_ad_user_status.return_value = {"status": "Active", "source": "AD"}
+        mock_engine_cls.return_value = mock_instance
+
+        # Insert a candidate user
+        upsert_user({"email": "testuser@corp.local", "first_name": "Test", "last_name": "User"}, self.temp_db_path)
+
+        sync_svc = SyncService(db_path=self.temp_db_path)
+        sync_svc.current_run_id = 101
+
+        cfg = {
+            "ad_host": "dc01.corp.local",
+            "ad_port": 389,
+            "ad_base_dn": "DC=corp,DC=local",
+            "ad_use_ssl": False,
+            "ad_manual_mode": True,
+            "ad_username": "binduser",
+            "ad_password": "secretpassword",
+            "ad_forests": ["corp.local"]
+        }
+
+        # Run _run_ldap_sync synchronously
+        sync_svc._run_ldap_sync(cfg, recheck_all=True, matching_attribute="sam")
+
+        # Verify LDAPSyncEngine was instantiated without 'host' keyword argument
+        self.assertTrue(mock_engine_cls.called)
+        init_kwargs = mock_engine_cls.call_args[1]
+        self.assertNotIn("host", init_kwargs)
+        self.assertEqual(init_kwargs.get("manual_host"), "dc01.corp.local")
+        self.assertEqual(init_kwargs.get("manual_port"), 389)
+
+    def test_role_guard_sysadmin_classification(self):
+        """
+        Verify that accounts with 'sysadmin' in role, email, or groups are properly
+        classified as 'SysAdmin' and flagged with is_privileged = 1.
+        """
+        # User with role sysadmin
+        upsert_user({
+            "email": "sysadmin@corp.local",
+            "first_name": "System",
+            "last_name": "Administrator",
+            "role": "sysadmin"
+        }, self.temp_db_path)
+
+        # Standard non-privileged user
+        upsert_user({
+            "email": "standard.user@corp.local",
+            "first_name": "Standard",
+            "last_name": "User",
+            "role": "End User"
+        }, self.temp_db_path)
+
+        conn = get_db_connection(self.temp_db_path)
+        sysadmin_row = conn.execute("SELECT role, is_privileged FROM users WHERE email = 'sysadmin@corp.local'").fetchone()
+        user_row = conn.execute("SELECT role, is_privileged FROM users WHERE email = 'standard.user@corp.local'").fetchone()
+        conn.close()
+
+        self.assertIsNotNone(sysadmin_row)
+        self.assertEqual(sysadmin_row["role"], "SysAdmin")
+        self.assertEqual(sysadmin_row["is_privileged"], 1)
+
+        self.assertIsNotNone(user_row)
+        self.assertEqual(user_row["role"], "End User")
+        self.assertEqual(user_row["is_privileged"], 0)
+
+    def test_role_guard_api_filtering(self):
+        """
+        Verify that GET /api/users?role_guard=exclude_admins and admins_only properly
+        filter users based on is_privileged.
+        """
+        upsert_user({"email": "sysadmin@corp.local", "role": "SysAdmin"}, self.temp_db_path)
+        upsert_user({"email": "regular@corp.local", "role": "End User"}, self.temp_db_path)
+
+        with patch("app.main.DEFAULT_DB_PATH", self.temp_db_path):
+            # Test exclude_admins: should only return regular user
+            res_ex = self.client.get("/api/users?role_guard=exclude_admins")
+            self.assertEqual(res_ex.status_code, 200)
+            users_ex = res_ex.get_json()["users"]
+            self.assertEqual(len(users_ex), 1)
+            self.assertEqual(users_ex[0]["email"], "regular@corp.local")
+
+            # Test admins_only: should only return sysadmin
+            res_adm = self.client.get("/api/users?role_guard=admins_only")
+            self.assertEqual(res_adm.status_code, 200)
+            users_adm = res_adm.get_json()["users"]
+            self.assertEqual(len(users_adm), 1)
+            self.assertEqual(users_adm[0]["email"], "sysadmin@corp.local")
+
+    def test_reset_cleanup_plan_database_helper(self):
+        """
+        Verify reset_cleanup_plan works for both staged_only and purge_all modes,
+        while strictly preserving execution_runs and logs compliance tables.
+        """
+        # Insert users and stage actions
+        u1 = upsert_user({"email": "user1@corp.local"}, self.temp_db_path)
+        u2 = upsert_user({"email": "user2@corp.local"}, self.temp_db_path)
+        set_users_action("delete", user_ids=[u1, u2], db_path=self.temp_db_path)
+
+        # Create an execution run and log entry
+        run_id = create_execution_run("test", 2, db_path=self.temp_db_path)
+        add_log("INFO", "Compliance test log entry", run_id=run_id, db_path=self.temp_db_path)
+
+        # 1. Mode: staged_only -> unstage actions back to 'none'
+        unstage_count = reset_cleanup_plan("staged_only", self.temp_db_path)
+        self.assertEqual(unstage_count, 2)
+
+        conn = get_db_connection(self.temp_db_path)
+        actions = [r["selected_action"] for r in conn.execute("SELECT selected_action FROM users").fetchall()]
+        self.assertEqual(actions, ["none", "none"])
+
+        # 2. Mode: purge_all -> removes all users from users table
+        purged_count = reset_cleanup_plan("purge_all", self.temp_db_path)
+        self.assertEqual(purged_count, 2)
+
+        user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        self.assertEqual(user_count, 0)
+
+        # CRITICAL INVARIANT: execution_runs and logs must be preserved
+        run_count = conn.execute("SELECT COUNT(*) FROM execution_runs").fetchone()[0]
+        log_count = conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+        conn.close()
+
+        self.assertEqual(run_count, 1)
+        self.assertEqual(log_count, 1)
+
+    def test_plan_reset_api_endpoints(self):
+        """
+        Verify POST /api/plan/reset endpoints for both staged_only and purge_all.
+        """
+        u1 = upsert_user({"email": "reset1@corp.local"}, self.temp_db_path)
+        set_users_action("deactivate", user_ids=[u1], db_path=self.temp_db_path)
+
+        with patch("app.main.DEFAULT_DB_PATH", self.temp_db_path):
+            # 1. Staged only reset
+            res_staged = self.client.post("/api/plan/reset", json={"mode": "staged_only"})
+            self.assertEqual(res_staged.status_code, 200)
+            self.assertTrue(res_staged.get_json()["success"])
+
+            conn = get_db_connection(self.temp_db_path)
+            user = conn.execute("SELECT selected_action FROM users WHERE id = ?", (u1,)).fetchone()
+            self.assertEqual(user["selected_action"], "none")
+            conn.close()
+
+            # 2. Purge all reset
+            res_purge = self.client.post("/api/plan/reset", json={"mode": "purge_all"})
+            self.assertEqual(res_purge.status_code, 200)
+            self.assertTrue(res_purge.get_json()["success"])
+
+            conn = get_db_connection(self.temp_db_path)
+            total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            self.assertEqual(total, 0)
+            conn.close()
+
+    def test_delete_single_user_api(self):
+        """
+        Verify DELETE /api/users/<user_id> removes an individual candidate.
+        """
+        u1 = upsert_user({"email": "keep@corp.local"}, self.temp_db_path)
+        u2 = upsert_user({"email": "remove@corp.local"}, self.temp_db_path)
+
+        with patch("app.main.DEFAULT_DB_PATH", self.temp_db_path):
+            res = self.client.delete(f"/api/users/{u2}")
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertTrue(data["success"])
+
+            conn = get_db_connection(self.temp_db_path)
+            users = [r["email"] for r in conn.execute("SELECT email FROM users").fetchall()]
+            conn.close()
+
+            self.assertIn("keep@corp.local", users)
+            self.assertNotIn("remove@corp.local", users)
+
+    def test_export_plan_csv_endpoint(self):
+        """
+        Verify GET /api/plan/export streams a valid CSV with cleanup plan columns.
+        """
+        upsert_user({
+            "email": "export.candidate@corp.local",
+            "first_name": "Export",
+            "last_name": "Candidate",
+            "role": "End User",
+            "ad_status": "NOT_FOUND"
+        }, self.temp_db_path)
+
+        with patch("app.main.DEFAULT_DB_PATH", self.temp_db_path):
+            res = self.client.get("/api/plan/export")
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.mimetype, "text/csv")
+            self.assertIn("attachment; filename=cleanup_plan_", res.headers.get("Content-Disposition", ""))
+
+            content = res.data.decode("utf-8")
+            self.assertIn("Email,First Name,Last Name", content)
+            self.assertIn("Planned Action", content)
+            self.assertIn("export.candidate@corp.local", content)
+            self.assertIn("NOT_FOUND", content)
 
 
 if __name__ == "__main__":

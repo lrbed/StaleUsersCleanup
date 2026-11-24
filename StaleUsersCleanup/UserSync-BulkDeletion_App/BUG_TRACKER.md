@@ -66,3 +66,8 @@
 | **API-CFG-01** | Unit | Masked Config REST Route | **PASS** | Confirmed `/api/config` returns status 200 and masks secret keys |
 | **API-PFL-01** | Unit | Preflight Diagnostic Route | **PASS** | Confirmed `/api/preflight` returns health status for all 3 subsystems |
 | **API-USR-01** | Unit | Users Pagination Route | **PASS** | Confirmed `/api/users` paginates properly with page/limit parameters |
+| **BUG-LDAP-01** | v2.3.1 | Escaped Bug: LDAPSyncEngine Host Arg | **PASS** | Removed spurious `host` argument from `SyncService._run_ldap_sync`; unit regression verified |
+| **ROLE-GUARD-01** | v2.3.1 | SysAdmin Badge & Role Triage | **PASS** | Corrected `sysadmin` classification to `SysAdmin`; verified `role_guard` filter query parameter |
+| **PLAN-RESET-01** | v2.3.1 | Plan Reset (Staged & Purge) | **PASS** | Verified `staged_only` resets actions to `none` and `purge_all` clears users while protecting logs |
+| **PLAN-DEL-01** | v2.3.1 | Single User Candidate Removal | **PASS** | Verified `DELETE /api/users/<id>` removes candidate from local plan database |
+| **PLAN-EXP-01** | v2.3.1 | Export Plan CSV Stream | **PASS** | Verified `/api/plan/export` streams complete CSV plan with attributes and staging actions |

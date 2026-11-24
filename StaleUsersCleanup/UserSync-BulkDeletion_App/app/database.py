@@ -98,7 +98,14 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
             cursor.execute("""
                 UPDATE users
                 SET is_privileged = 1,
-                    role = CASE WHEN role IS NULL OR role = 'End User' THEN 'Admin (Role Guard Protected)' ELSE role END
+                    role = CASE 
+                        WHEN LOWER(email) LIKE 'sysadmin%' OR LOWER(role) LIKE '%sysadmin%' THEN 'SysAdmin'
+                        WHEN LOWER(email) LIKE 'admin%' OR LOWER(email) LIKE 'administrator%' OR LOWER(role) LIKE '%system%' THEN 'System Admin'
+                        WHEN LOWER(role) LIKE '%security%' THEN 'Security Admin'
+                        WHEN LOWER(role) LIKE '%co-admin%' OR LOWER(role) LIKE '%coadmin%' THEN 'Co-Admin'
+                        WHEN role IS NULL OR role = '' OR role = 'End User' THEN 'Admin'
+                        ELSE role
+                    END
                 WHERE is_privileged = 0 AND (
                     role LIKE '%Admin%' OR role LIKE '%System%' OR role LIKE '%Security%'
                     OR groups LIKE '%Administrators%' OR groups LIKE '%Domain Admins%'
@@ -225,8 +232,19 @@ def upsert_user(user_data: Dict[str, Any], db_path: str = DEFAULT_DB_PATH) -> in
     else:
         role_lower = str(role).strip().lower()
         groups_raw = str(user_data.get("groups", "")).lower()
-        if any(pr in role_lower for pr in ["admin", "super", "system", "security", "co-admin"]) or any(pg in groups_raw for pg in ["admin", "poweradmin"]):
+        email_lower = email.lower()
+        if any(pr in role_lower for pr in ["admin", "super", "system", "security", "co-admin"]) or any(pg in groups_raw for pg in ["admin", "poweradmin"]) or any(email_lower.startswith(prefix) for prefix in ["admin@", "administrator@", "sysadmin@", "coadmin@"]):
             is_privileged = 1
+            if "sysadmin" in role_lower or email_lower.startswith("sysadmin"):
+                role = "SysAdmin"
+            elif "system" in role_lower or email_lower.startswith("admin") or email_lower.startswith("administrator"):
+                role = "System Admin"
+            elif "security" in role_lower:
+                role = "Security Admin"
+            elif "co-admin" in role_lower or "coadmin" in role_lower or email_lower.startswith("coadmin"):
+                role = "Co-Admin"
+            elif role_lower in ("end user", "", "admin"):
+                role = "Admin"
         else:
             is_privileged = 0
 
@@ -421,6 +439,39 @@ def set_users_action(
             conn.commit()
             return cursor.rowcount
         return 0
+
+
+def reset_cleanup_plan(mode: str = "staged_only", db_path: str = DEFAULT_DB_PATH) -> int:
+    """
+    Reset cleanup plan:
+      - 'staged_only': clears staged actions (selected_action = 'none') without deleting users.
+      - 'purge_all': deletes all users from the database, giving a clean slate while preserving audit logs.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db_connection(db_path) as conn:
+        if mode == "purge_all":
+            cursor = conn.execute("DELETE FROM users")
+            conn.commit()
+            return cursor.rowcount
+        else:
+            cursor = conn.execute("""
+                UPDATE users SET
+                    selected_action = 'none',
+                    action_status = 'none',
+                    action_result = NULL,
+                    updated_at = ?
+                WHERE selected_action != 'none'
+            """, (now,))
+            conn.commit()
+            return cursor.rowcount
+
+
+def delete_single_user(user_id: int, db_path: str = DEFAULT_DB_PATH) -> bool:
+    """Removes an individual user from the local SQLite cleanup database."""
+    with get_db_connection(db_path) as conn:
+        cursor = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 def get_distinct_groups(db_path: str = DEFAULT_DB_PATH) -> List[str]:
