@@ -349,6 +349,70 @@ class TestEnterpriseEnhancements(unittest.TestCase):
             self.assertTrue(data["success"])
             self.assertEqual(data["run_id"], 99)
 
+    # -----------------------------------------------------------------
+    # 7. SORTABLE USERS TABLE & STANDALONE SAM USERNAME MATCHING
+    # -----------------------------------------------------------------
+    def test_users_table_sorting_endpoint(self):
+        # Insert 3 users with different emails and activity dates
+        upsert_user({"email": "charlie@test.com", "first_name": "Charlie", "last_name": "C", "last_activity_date": "2026-03-01"}, self.temp_db_path)
+        upsert_user({"email": "alice@test.com", "first_name": "Alice", "last_name": "A", "last_activity_date": "2026-01-01"}, self.temp_db_path)
+        upsert_user({"email": "bob@test.com", "first_name": "Bob", "last_name": "B", "last_activity_date": "2026-02-01"}, self.temp_db_path)
+
+        with patch("app.main.DEFAULT_DB_PATH", self.temp_db_path):
+            # Sort by email ASC
+            res_asc = self.client.get("/api/users?sort_by=email&sort_dir=asc")
+            self.assertEqual(res_asc.status_code, 200)
+            users_asc = res_asc.get_json()["users"]
+            self.assertEqual(users_asc[0]["email"], "alice@test.com")
+            self.assertEqual(users_asc[1]["email"], "bob@test.com")
+            self.assertEqual(users_asc[2]["email"], "charlie@test.com")
+
+            # Sort by email DESC
+            res_desc = self.client.get("/api/users?sort_by=email&sort_dir=desc")
+            self.assertEqual(res_desc.status_code, 200)
+            users_desc = res_desc.get_json()["users"]
+            self.assertEqual(users_desc[0]["email"], "charlie@test.com")
+            self.assertEqual(users_desc[1]["email"], "bob@test.com")
+            self.assertEqual(users_desc[2]["email"], "alice@test.com")
+
+    @patch("socket.socket")
+    @patch("app.ldap_client.HAS_LDAP3", True)
+    @patch("app.ldap_client.Server")
+    @patch("app.ldap_client.Connection")
+    def test_standalone_sam_attribute_matching(self, mock_conn_cls, mock_server_cls, mock_sock_cls):
+        # Mock socket connect_ex to succeed (0)
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.return_value = 0
+        mock_sock_cls.return_value = mock_sock
+
+        mock_conn = MagicMock()
+        mock_conn_cls.return_value = mock_conn
+
+        # Mock an active user entry
+        mock_entry = MagicMock()
+        mock_entry.userAccountControl.value = 512
+        mock_conn.entries = [mock_entry]
+
+        engine = LDAPSyncEngine(
+            manual_mode=True,
+            manual_host="127.0.0.1",
+            manual_port=389,
+            manual_base_dn="DC=corp,DC=local",
+            forests=["corp.local"]
+        )
+
+        # Test netbios stripping: CORP\jdoe -> search for jdoe
+        res = engine.get_ad_user_status(
+            email="john.doe@company.com",
+            secondary_user_id="CORP\\jdoe",
+            matching_attribute="sam"
+        )
+        self.assertEqual(res["status"], "Active")
+
+        # Verify search filter had sAMAccountName=jdoe
+        search_call_args = mock_conn.search.call_args[1]
+        self.assertIn("(sAMAccountName=jdoe)", search_call_args["search_filter"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -801,22 +801,40 @@ async function startTargetedSync() {
 }
 
 async function startLdapSync(recheckAll = false) {
+    const matchingAttr = document.getElementById("corr-matching-attr")?.value || "mail_or_upn";
+    const customAttrName = document.getElementById("corr-custom-attr-name")?.value.trim() || "";
+
     try {
         const res = await fetch("/api/sync/ldap/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ recheck_all: recheckAll })
+            body: JSON.stringify({
+                recheck_all: recheckAll,
+                matching_attribute: matchingAttr,
+                custom_attribute: customAttrName
+            })
         });
         const data = await res.json();
         if (data.success) {
             fetchSyncStatus();
-            // Switch to sync tab or poll automatically
             startSyncPolling();
         } else {
             alert("Failed to start Active Directory correlation: " + (data.error || "Unknown"));
         }
     } catch (e) {
         alert("Request error: " + e.message);
+    }
+}
+
+function onCorrAttrChange() {
+    const sel = document.getElementById("corr-matching-attr")?.value;
+    const customContainer = document.getElementById("corr-custom-attr-container");
+    if (customContainer) {
+        if (sel === "custom") {
+            customContainer.classList.remove("hidden");
+        } else {
+            customContainer.classList.add("hidden");
+        }
     }
 }
 
@@ -865,15 +883,16 @@ async function startAdIngestion() {
 }
 
 async function startCsvImport() {
+    const importMode = document.querySelector('input[name="csv-import-mode"]:checked')?.value || "raw_users";
     try {
         const res = await fetch("/api/sync/csv/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({})
+            body: JSON.stringify({ import_mode: importMode })
         });
         const data = await res.json();
         if (data.success) {
-            alert(`CSV Import Complete: ${data.imported} users imported, ${data.errors} errors.`);
+            alert(`CSV Import Complete (${importMode}): ${data.imported} users processed, ${data.errors} errors.`);
             loadUsers(1);
         } else {
             alert("CSV Import failed: " + (data.error || "Unknown"));
@@ -883,13 +902,72 @@ async function startCsvImport() {
     }
 }
 
+async function uploadAndImportCsv() {
+    const fileInput = document.getElementById("csv-file-upload-input");
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        alert("Please choose a CSV file to upload.");
+        return;
+    }
+    const file = fileInput.files[0];
+    const importMode = document.querySelector('input[name="csv-import-mode"]:checked')?.value || "raw_users";
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("import_mode", importMode);
+
+    try {
+        const res = await fetch("/api/sync/csv/upload", {
+            method: "POST",
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`CSV File Upload & Import Successful (${importMode}): ${data.imported} users processed, ${data.errors} errors.`);
+            loadUsers(1);
+        } else {
+            alert("CSV Upload failed: " + (data.error || "Unknown error"));
+        }
+    } catch (e) {
+        alert("Upload request error: " + e.message);
+    }
+}
+
 async function pauseSync() { await fetch("/api/sync/pause", { method: "POST" }); fetchSyncStatus(); }
 async function resumeSync() { await fetch("/api/sync/resume", { method: "POST" }); fetchSyncStatus(); }
 async function cancelSync() { await fetch("/api/sync/cancel", { method: "POST" }); fetchSyncStatus(); }
 
 // -------------------------------------------------------------
-// USER DIRECTORY, FILTERING & STAGING
+// USER DIRECTORY, FILTERING, SORTING & STAGING
 // -------------------------------------------------------------
+let currentSortBy = "id";
+let currentSortDir = "asc";
+
+function toggleSort(columnKey) {
+    if (currentSortBy === columnKey) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+    } else {
+        currentSortBy = columnKey;
+        currentSortDir = "asc";
+    }
+    updateSortHeaderIcons();
+    loadUsers(1);
+}
+
+function updateSortHeaderIcons() {
+    const sortColumns = ["email", "name", "role", "secondary_user_id", "is_active", "ad_status", "last_activity_date", "selected_action"];
+    sortColumns.forEach(col => {
+        const iconEl = document.getElementById(`sort-icon-${col}`);
+        if (!iconEl) return;
+        if (currentSortBy === col) {
+            iconEl.innerText = currentSortDir === "asc" ? "▲" : "▼";
+            iconEl.className = "text-blue-400 font-bold text-xs";
+        } else {
+            iconEl.innerText = "↕";
+            iconEl.className = "text-slate-600 group-hover:text-slate-300";
+        }
+    });
+}
+
 function debounceUserSearch() {
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => loadUsers(1), 300);
@@ -921,6 +999,8 @@ async function loadUsers(page = 1) {
         group: document.getElementById("filter-group").value,
         is_active: document.getElementById("filter-is-active").value,
         selected_action: document.getElementById("filter-selected-action").value,
+        sort_by: currentSortBy,
+        sort_dir: currentSortDir
     });
 
     try {

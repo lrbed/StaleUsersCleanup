@@ -369,7 +369,12 @@ class SyncService:
     # -------------------------------------------------------------
     # LDAP SYNC WORKER
     # -------------------------------------------------------------
-    def start_ldap_sync(self, recheck_all: bool = False) -> Dict[str, Any]:
+    def start_ldap_sync(
+        self,
+        recheck_all: bool = False,
+        matching_attribute: str = "mail_or_upn",
+        custom_attribute: Optional[str] = None
+    ) -> Dict[str, Any]:
         with self._lock:
             if self._thread and self._thread.is_alive():
                 return {"success": False, "error": "A synchronization task is already in progress"}
@@ -384,47 +389,67 @@ class SyncService:
             self.current_message = "Initializing LDAP Correlation Engine..."
 
             cfg = load_config(self.db_path)
+            config_snapshot = dict(cfg)
+            config_snapshot["correlation_params"] = {
+                "recheck_all": recheck_all,
+                "matching_attribute": matching_attribute,
+                "custom_attribute": custom_attribute
+            }
+
             self.current_run_id = create_execution_run(
                 run_mode="ldap_sync",
-                config_snapshot=cfg,
+                config_snapshot=config_snapshot,
                 db_path=self.db_path
             )
 
             self._thread = threading.Thread(
                 target=self._run_ldap_sync,
-                args=(cfg, recheck_all),
+                args=(cfg, recheck_all, matching_attribute, custom_attribute),
                 daemon=True
             )
             self._thread.start()
             return {"success": True, "run_id": self.current_run_id}
 
-    def _run_ldap_sync(self, cfg: Dict[str, Any], recheck_all: bool):
+    def _run_ldap_sync(
+        self,
+        cfg: Dict[str, Any],
+        recheck_all: bool,
+        matching_attribute: str = "mail_or_upn",
+        custom_attribute: Optional[str] = None
+    ):
         run_id = self.current_run_id
-        add_log("INFO", "Starting Active Directory (LDAP) Safety Check loop", run_id=run_id, db_path=self.db_path)
+        attr_label = matching_attribute if matching_attribute != "custom" else f"custom:{custom_attribute}"
+        add_log("INFO", f"Starting Active Directory (LDAP) Safety Check loop (Matching on: {attr_label})", run_id=run_id, db_path=self.db_path)
 
         def log_cb(lvl, msg):
             add_log(lvl, msg, run_id=run_id, db_path=self.db_path)
 
         try:
             ldap_engine = LDAPSyncEngine(
+                host=cfg.get("ad_host", ""),
+                manual_host=cfg.get("ad_host", ""),
+                manual_port=int(cfg.get("ad_port", 389)),
+                manual_base_dn=cfg.get("ad_base_dn", ""),
+                manual_use_ssl=bool(cfg.get("ad_use_ssl", False)),
+                manual_mode=bool(cfg.get("ad_manual_mode", True)),
                 forests=cfg.get("ad_forests", []),
                 username=cfg.get("ad_username", ""),
                 password=cfg.get("ad_password", ""),
                 use_ssl=bool(cfg.get("ad_use_ssl", False)),
-                default_port=int(cfg.get("ad_port", 3268)),
+                default_port=int(cfg.get("ad_port", 389)),
                 extra_attributes=cfg.get("extra_ad_attributes"),
                 logger_func=log_cb
             )
 
-            # Query candidate users from SQLite
+            # Query candidate users from SQLite including secondary_user_id
             with get_db_connection(self.db_path) as conn:
                 if recheck_all:
-                    users = conn.execute("SELECT email, cloudsoc_id FROM users").fetchall()
+                    users = conn.execute("SELECT email, secondary_user_id, cloudsoc_id FROM users").fetchall()
                 else:
-                    users = conn.execute("SELECT email, cloudsoc_id FROM users WHERE ad_status IN ('Unchecked', 'Error')").fetchall()
+                    users = conn.execute("SELECT email, secondary_user_id, cloudsoc_id FROM users WHERE ad_status IN ('Unchecked', 'Error')").fetchall()
 
             self.total_count = len(users)
-            add_log("INFO", f"Checking {self.total_count} candidate users against AD forests", run_id=run_id, db_path=self.db_path)
+            add_log("INFO", f"Checking {self.total_count} candidate users against AD (Attribute: {attr_label})", run_id=run_id, db_path=self.db_path)
 
             for u in users:
                 if self._cancel_flag:
@@ -439,7 +464,13 @@ class SyncService:
                         break
 
                 email = u["email"]
-                ad_res = ldap_engine.get_ad_user_status(email)
+                sec_id = u["secondary_user_id"] if "secondary_user_id" in u.keys() else None
+                ad_res = ldap_engine.get_ad_user_status(
+                    email=email,
+                    secondary_user_id=sec_id,
+                    matching_attribute=matching_attribute,
+                    custom_attribute_name=custom_attribute
+                )
 
                 status = ad_res.get("status", "Error")
                 forest = ad_res.get("forest", "-")
@@ -492,15 +523,20 @@ class SyncService:
             self.current_mode = "idle"
 
     # -------------------------------------------------------------
-    # CSV IMPORT WORKER
+    # CSV IMPORT WORKER (Supports Raw Users & Staged Cleanup Plans)
     # -------------------------------------------------------------
-    def import_csv_file(self, file_path: str) -> Dict[str, Any]:
-        """Import exported user data directly from CSV (e.g. exported_users.csv)."""
+    def import_csv_file(self, file_path: str, import_mode: str = "raw_users") -> Dict[str, Any]:
+        """
+        Import user data directly from CSV.
+        import_mode:
+          - 'raw_users': Standard CloudSOC export or HR spreadsheet.
+          - 'cleanup_plan': Restores previously saved cleanup plan with actions and AD status.
+        """
         if not os.path.isfile(file_path):
             return {"success": False, "error": f"File not found: {file_path}"}
 
-        run_id = create_execution_run(run_mode="csv_import", config_snapshot={"source_file": file_path}, db_path=self.db_path)
-        add_log("INFO", f"Importing users from CSV: {file_path}", run_id=run_id, db_path=self.db_path)
+        run_id = create_execution_run(run_mode="csv_import", config_snapshot={"source_file": file_path, "import_mode": import_mode}, db_path=self.db_path)
+        add_log("INFO", f"Importing users from CSV ({import_mode}): {file_path}", run_id=run_id, db_path=self.db_path)
 
         imported = 0
         errors = 0
@@ -530,19 +566,23 @@ class SyncService:
 
                 user_dict = {
                     "email": email,
-                    "first_name": row.get("First Name", ""),
-                    "last_name": row.get("Last Name", ""),
-                    "secondary_user_id": row.get("Secondary ID", ""),
-                    "created_by": row.get("Created By", ""),
-                    "created_on": row.get("Creation Date", ""),
-                    "modified_by": row.get("Modified By", ""),
-                    "modified_on": row.get("Modified Date", ""),
-                    "title": row.get("Title", ""),
-                    "groups": row.get("Groups", "[]"),
-                    "last_activity_date": row.get("Last Activity Date", ""),
-                    "work_phone": row.get("Work Phone", ""),
-                    "cell_phone": row.get("Cell Phone", ""),
-                    "Active": row.get("Active", "Yes"),
+                    "first_name": row.get("First Name") or row.get("first_name", ""),
+                    "last_name": row.get("Last Name") or row.get("last_name", ""),
+                    "secondary_user_id": row.get("Secondary ID") or row.get("secondary_user_id", ""),
+                    "created_by": row.get("Created By") or row.get("created_by", ""),
+                    "created_on": row.get("Creation Date") or row.get("created_on", ""),
+                    "modified_by": row.get("Modified By") or row.get("modified_by", ""),
+                    "modified_on": row.get("Modified Date") or row.get("modified_on", ""),
+                    "title": row.get("Title") or row.get("title", ""),
+                    "groups": row.get("Groups") or row.get("groups", "[]"),
+                    "last_activity_date": row.get("Last Activity Date") or row.get("last_activity_date", ""),
+                    "work_phone": row.get("Work Phone") or row.get("work_phone", ""),
+                    "cell_phone": row.get("Cell Phone") or row.get("cell_phone", ""),
+                    "Active": row.get("Active") or row.get("is_active", "Yes"),
+                    "cloudsoc_id": row.get("cloudsoc_id") or row.get("CloudSOC ID", ""),
+                    "ad_status": row.get("ad_status") or row.get("AD Status", "Unchecked"),
+                    "selected_action": (row.get("selected_action") or row.get("Planned Action", "none")).lower() if import_mode == "cleanup_plan" else "none",
+                    "action_status": "pending" if (import_mode == "cleanup_plan" and (row.get("selected_action") or row.get("Planned Action", "none")).lower() != "none") else "none",
                     "raw_json": json.dumps(row)
                 }
 

@@ -432,7 +432,13 @@ def start_cloudsoc_sync():
 def start_ldap_sync():
     data = request.get_json() or {}
     recheck_all = bool(data.get("recheck_all", False))
-    result = sync_service.start_ldap_sync(recheck_all=recheck_all)
+    matching_attribute = (data.get("matching_attribute") or "mail_or_upn").strip()
+    custom_attribute = (data.get("custom_attribute") or "").strip() or None
+    result = sync_service.start_ldap_sync(
+        recheck_all=recheck_all,
+        matching_attribute=matching_attribute,
+        custom_attribute=custom_attribute
+    )
     status_code = 200 if result.get("success") else 400
     return jsonify(result), status_code
 
@@ -460,6 +466,7 @@ def start_ad_ingest():
 def start_csv_sync():
     data = request.get_json() or {}
     file_path = data.get("file_path")
+    import_mode = data.get("import_mode", "raw_users")
     if not file_path:
         candidates = [
             os.path.join(BASE_DIR, "UserSync-BulkDeletion", "exported_users.csv"),
@@ -473,8 +480,70 @@ def start_csv_sync():
     if not file_path or not os.path.isfile(file_path):
         return jsonify({"success": False, "error": f"CSV file not found: {file_path}"}), 400
 
-    res = sync_service.import_csv_file(file_path)
+    res = sync_service.import_csv_file(file_path, import_mode=import_mode)
     return jsonify(res)
+
+
+@app.route("/api/sync/csv/upload", methods=["POST"])
+def upload_csv_file():
+    """Upload a custom CSV file (raw users or saved cleanup plan) and import it."""
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file uploaded"}), 400
+
+    f = request.files["file"]
+    import_mode = request.form.get("import_mode", "raw_users")
+
+    upload_dir = os.path.join(BASE_DIR, "data", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    safe_name = f"import_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{os.path.basename(f.filename)}"
+    dest_path = os.path.join(upload_dir, safe_name)
+    f.save(dest_path)
+
+    res = sync_service.import_csv_file(dest_path, import_mode=import_mode)
+    return jsonify(res)
+
+
+@app.route("/api/plan/export", methods=["GET"])
+def export_cleanup_plan():
+    """Export current Cleanup Plan to CSV for audit, approval, or reloading."""
+    only_staged = request.args.get("only_staged", "false").lower() == "true"
+    with get_db_connection(DEFAULT_DB_PATH) as conn:
+        if only_staged:
+            rows = conn.execute("SELECT * FROM users WHERE selected_action != 'none' ORDER BY id ASC").fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM users ORDER BY id ASC").fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Email", "First Name", "Last Name", "Secondary ID", "Role",
+        "CloudSOC ID", "CloudSOC Active", "Last Activity Date",
+        "Active Directory Status", "Planned Action", "Action Status", "Updated At"
+    ])
+
+    for r in rows:
+        writer.writerow([
+            r["email"],
+            r["first_name"] or "",
+            r["last_name"] or "",
+            r["secondary_user_id"] or "",
+            r["role"] or "",
+            r["cloudsoc_id"] or "",
+            "Yes" if r["is_active"] == 1 else "No",
+            r["last_activity_date"] or "",
+            r["ad_status"] or "Unchecked",
+            r["selected_action"] or "none",
+            r["action_status"] or "none",
+            r["updated_at"] or ""
+        ])
+
+    csv_data = output.getvalue()
+    filename = f"cleanup_plan_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @app.route("/api/sync/pause", methods=["POST"])
@@ -696,6 +765,8 @@ def get_users():
     inactivity_mode = request.args.get("inactivity_mode", "").strip().lower()
     inactivity_days = request.args.get("inactivity_days", "").strip()
     selected_action = request.args.get("selected_action", "").strip()
+    sort_by = request.args.get("sort_by", "id").strip().lower()
+    sort_dir = request.args.get("sort_dir", "asc").strip().lower()
 
     offset = (page - 1) * limit
     query = "SELECT * FROM users WHERE 1=1"
@@ -761,12 +832,31 @@ def get_users():
         query += " AND (ad_status IN ('Disabled', 'NotFound') OR is_active = 0 OR last_activity_date IS NULL OR TRIM(last_activity_date) = '' OR last_activity_date < ?)"
         params.append(stale_cutoff)
 
+    ALLOWED_SORT_COLUMNS = {
+        "email": "email",
+        "name": "COALESCE(NULLIF(first_name || ' ' || last_name, ' '), email)",
+        "role": "role",
+        "secondary_user_id": "secondary_user_id",
+        "cloudsoc": "is_active",
+        "is_active": "is_active",
+        "active directory": "ad_status",
+        "ad_status": "ad_status",
+        "last activity": "last_activity_date",
+        "last_activity_date": "last_activity_date",
+        "planned action": "selected_action",
+        "selected_action": "selected_action",
+        "id": "id"
+    }
+
+    sort_col = ALLOWED_SORT_COLUMNS.get(sort_by, "id")
+    order_direction = "DESC" if sort_dir == "desc" else "ASC"
+
     count_query = f"SELECT COUNT(*) as total FROM ({query})"
 
     with get_db_connection(DEFAULT_DB_PATH) as conn:
         total_count = conn.execute(count_query, params).fetchone()["total"]
 
-        query += " ORDER BY id ASC LIMIT ? OFFSET ?"
+        query += f" ORDER BY {sort_col} {order_direction} LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = conn.execute(query, params).fetchall()

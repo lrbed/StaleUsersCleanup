@@ -15,6 +15,10 @@
 * **Execution Location:**
   * Root Project Dir: `D:\Users\Ahmed\Projects\StaleUsersCleanup\StaleUsersCleanup\UserSync-BulkDeletion_App`
   * Portable Distribution: `.\dist\CloudSOC-Cleanup-Utility-v2.3.0-Portable\`
+* **Key Workflows:**
+  * **Ingestion (Import & Sync):** CloudSOC Tenant API, Active Directory Direct Ingestion (LDAP filter/Base DN/count limit), and CSV Ingestion (Raw Users vs. Staged Cleanup Plan Restore).
+  * **Cleanup Plan Builder:** Interactive sortable table headers (ASC/DESC), AD Delta Correlation with configurable matching attributes (`mail`, `userPrincipalName`, `sAMAccountName` with NetBIOS stripping), staged action management, and CSV plan export.
+  * **Execution Engine:** Dry-run and live deactivation, group moving, and hard deletion with rate limiting, exponential backoff, and Role Guard protection.
 
 ---
 

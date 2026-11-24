@@ -184,10 +184,18 @@ class LDAPSyncEngine:
 
         return result
 
-    def get_ad_user_status(self, email: str, forests: Optional[List[str]] = None) -> Dict[str, Any]:
+    def get_ad_user_status(
+        self,
+        email: str,
+        forests: Optional[List[str]] = None,
+        secondary_user_id: Optional[str] = None,
+        matching_attribute: str = "mail_or_upn",
+        custom_attribute_name: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Replicates Get-ADUserSafetyStatus from Cloudsoc.psm1.
         Strictly FAILS CLOSED: Any connectivity/bind error returns status 'Error'.
+        Supports selectable matching attribute and NetBIOS DOMAIN\\USER username extraction.
         """
         target_forests = forests or self.forests
         if not target_forests:
@@ -205,15 +213,40 @@ class LDAPSyncEngine:
                 "details": "ldap3 module not installed in Python environment"
             }
 
-        # Construct LDAP search filter matching UserSync.ps1
-        filter_parts = [
-            f"(mail={safe_email})",
-            f"(userPrincipalName={safe_email})",
-            f"(sAMAccountName={safe_email})",
-            f"(proxyAddresses=smtp:{safe_email})",
-            f"(proxyAddresses=SMTP:{safe_email})"
-        ]
-        ldap_filter = f"(|{''.join(filter_parts)})"
+        # Helper to extract username from NetBIOS DOMAIN\USER or email prefix
+        def _extract_username(target_email: str, sec_id: Optional[str]) -> str:
+            if sec_id and str(sec_id).strip():
+                clean_sec = str(sec_id).strip().replace("'", "").replace(")", "").replace("(", "")
+                if "\\" in clean_sec:
+                    parts = clean_sec.split("\\", 1)
+                    if parts[1].strip():
+                        return parts[1].strip()
+                return clean_sec
+            if "@" in target_email:
+                return target_email.split("@", 1)[0].strip()
+            return target_email
+
+        # Construct targeted LDAP search filter based on selected attribute
+        attr_mode = (matching_attribute or "mail_or_upn").lower().strip()
+        if attr_mode == "sam":
+            sam_val = _extract_username(safe_email, secondary_user_id)
+            ldap_filter = f"(&(objectCategory=person)(objectClass=user)(sAMAccountName={sam_val}))"
+        elif attr_mode == "upn":
+            ldap_filter = f"(&(objectCategory=person)(objectClass=user)(userPrincipalName={safe_email}))"
+        elif attr_mode == "mail":
+            ldap_filter = f"(&(objectCategory=person)(objectClass=user)(mail={safe_email}))"
+        elif attr_mode == "custom" and custom_attribute_name and custom_attribute_name.strip():
+            clean_custom = custom_attribute_name.strip().replace("'", "").replace(")", "").replace("(", "")
+            ldap_filter = f"(&(objectCategory=person)(objectClass=user)({clean_custom}={safe_email}))"
+        else:
+            # Default mail_or_upn (matches UserSync.ps1)
+            filter_parts = [
+                f"(mail={safe_email})",
+                f"(userPrincipalName={safe_email})",
+                f"(proxyAddresses=smtp:{safe_email})",
+                f"(proxyAddresses=SMTP:{safe_email})"
+            ]
+            ldap_filter = f"(&(objectCategory=person)(objectClass=user)(|{''.join(filter_parts)}))"
 
         attributes_to_fetch = ["userAccountControl", "mail", "userPrincipalName", "sAMAccountName", "displayName"]
         for attr in self.extra_attributes:

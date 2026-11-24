@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.4.0] - 2026-11-23
+
+### Added
+- **Interactive Click-to-Sort Table Headers:** All column headers in the Cleanup Plan Builder table (`User Email / ID`, `Name`, `Role`, `Secondary ID`, `CloudSOC`, `Active Directory`, `Last Activity`, and `Planned Action`) can be clicked to toggle between Ascending (`▲`) and Descending (`▼`) sort order.
+- **Server-Side SQL Sorting:** `GET /api/users` now supports `sort_by` and `sort_dir` parameters with a secure column whitelist (`ALLOWED_SORT_COLUMNS`) ensuring instant, accurate sorting across large datasets.
+- **Selectable AD Matching Attribute in Cleanup Plan Builder:** Operator can choose the matching attribute used in Active Directory Delta Correlation:
+  - `Email or UserPrincipalName` (Default - Recommended)
+  - `sAMAccountName` (Standalone Domain - Extracts username from `DOMAIN\USER` or email prefix)
+  - `userPrincipalName Only`
+  - `mail Only`
+  - `Custom Active Directory Attribute` (e.g. `employeeID`)
+- **Standalone Domain NetBIOS Username Extraction:** In standalone domain environments (LDAP 389 / LDAPS 636), strips the `DOMAIN\` prefix from NetBIOS identities (`DOMAIN\USER` $\rightarrow$ `USER`) to query `(sAMAccountName=USER)`.
+- **Cleanup Plan Export to CSV:** Direct CSV download link (`/api/plan/export`) in the Cleanup Plan Builder toolbar to save the current plan for audit, approval, or backup.
+- **CSV Plan Restore Mode:** Channel 3 (CSV File Ingestion) now features a dual-mode selector:
+  - *Option A: Import Raw Users* (standard user accounts for triage)
+  - *Option B: Restore Saved Cleanup Plan* (re-ingests users and restores their staged actions and AD check statuses).
+- **Custom CSV File Upload:** Direct file upload endpoint (`/api/sync/csv/upload`) allowing operators to upload and import any raw user list or saved cleanup plan.
+
+---
+
 ## [2.3.0] - 2026-11-20
 
 ### Added

@@ -540,24 +540,54 @@
                 </div>
             </div>
 
-            <!-- CHANNEL 3: CSV File Ingestion -->
+            <!-- CHANNEL 3: CSV File Ingestion (Raw Users vs Saved Plan Restore) -->
             <div id="channel-csv" class="sync-channel-panel hidden bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div>
                         <h3 class="text-sm font-semibold text-white flex items-center gap-2">
-                            <span>CSV Export File Ingestion</span>
-                            <span class="text-xs px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">Local Disk</span>
+                            <span>CSV File Ingestion</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">Local Disk / Upload</span>
                         </h3>
-                        <p class="text-xs text-slate-400">Imports user records from exported_users.csv directly into the SQLite state database.</p>
+                        <p class="text-xs text-slate-400">Import raw user accounts from exported_users.csv or restore a previously saved Cleanup Plan with all staged actions intact.</p>
                     </div>
-                    <div class="flex items-center space-x-3">
-                        <button onclick="startCsvImport()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs border border-slate-700 font-semibold shadow transition">
-                            Import exported_users.csv
+                </div>
+
+                <!-- CSV Ingestion Mode Selector -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                        <label class="flex items-center space-x-2.5 cursor-pointer font-semibold text-white">
+                            <input type="radio" name="csv-import-mode" id="csv-mode-raw" value="raw_users" checked class="text-blue-600 focus:ring-0">
+                            <span>Option A: Import Raw Users</span>
+                        </label>
+                        <p class="text-[11px] text-slate-400 pl-6">Loads user accounts into SQLite without pre-staged actions. Ideal for exported_users.csv or fresh lists ready for triage.</p>
+                    </div>
+
+                    <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                        <label class="flex items-center space-x-2.5 cursor-pointer font-semibold text-white">
+                            <input type="radio" name="csv-import-mode" id="csv-mode-plan" value="cleanup_plan" class="text-emerald-500 focus:ring-0">
+                            <span class="text-emerald-400">Option B: Restore Saved Cleanup Plan</span>
+                        </label>
+                        <p class="text-[11px] text-slate-400 pl-6">Restores user records alongside their exact saved <strong>Planned Actions</strong> (`deactivate`, `delete`, `move_group`) and AD verification states.</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div class="flex items-center space-x-2">
+                        <input type="file" id="csv-file-upload-input" accept=".csv" class="text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer">
+                        <button onclick="uploadAndImportCsv()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow transition">
+                            Upload & Import CSV
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button onclick="startCsvImport()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs border border-slate-700 font-semibold shadow transition">
+                            Import Default exported_users.csv
                         </button>
                     </div>
                 </div>
-                <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 text-xs text-slate-400">
-                    <p>Reads from <code class="text-slate-200">./UserSync-BulkDeletion/exported_users.csv</code> or current root directory. Ideal for testing or offline staging.</p>
+
+                <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80 text-xs text-slate-400">
+                    <p>Default location: <code class="text-slate-200">./UserSync-BulkDeletion/exported_users.csv</code> or project root. You can also upload any exported Cleanup Plan CSV anytime to resume work seamlessly.</p>
                 </div>
             </div>
 
@@ -616,6 +646,30 @@
                             <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span>Re-check All with AD</span>
                         </button>
+                    </div>
+                </div>
+
+                <!-- AD Matching Attribute & NetBIOS Configuration Bar -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2 border-t border-slate-800">
+                    <div class="sm:col-span-2">
+                        <label class="block text-slate-400 font-medium mb-1 flex items-center gap-1.5">
+                            <span>AD Matching Attribute</span>
+                            <span class="has-tooltip cursor-help text-slate-400">
+                                ℹ️
+                                <span class="tooltip-text">Select which Active Directory attribute to check. For standalone domains, sAMAccountName extracts username from DOMAIN\USER format.</span>
+                            </span>
+                        </label>
+                        <select id="corr-matching-attr" onchange="onCorrAttrChange()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-emerald-500">
+                            <option value="mail_or_upn">Email or UserPrincipalName (Default - Recommended)</option>
+                            <option value="sam">sAMAccountName (Standalone Domain - Extracts username from DOMAIN\USER or email)</option>
+                            <option value="upn">userPrincipalName Only</option>
+                            <option value="mail">mail Only</option>
+                            <option value="custom">Custom Active Directory Attribute</option>
+                        </select>
+                    </div>
+                    <div id="corr-custom-attr-container" class="hidden sm:col-span-1">
+                        <label class="block text-slate-400 font-medium mb-1">Custom Attribute Name</label>
+                        <input type="text" id="corr-custom-attr-name" placeholder="e.g. employeeID" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs focus:outline-none focus:border-emerald-500">
                     </div>
                 </div>
             </div>
@@ -750,6 +804,11 @@
                     <span class="text-slate-400 font-medium">Selected: <strong id="lbl-selected-count" class="text-blue-400 font-mono text-sm">0</strong> users</span>
                     <button onclick="selectAllVisible(true)" class="text-blue-400 hover:text-blue-300 underline text-xs">Select Visible</button>
                     <button onclick="selectAllVisible(false)" class="text-slate-400 hover:text-slate-300 underline text-xs">Clear Selection</button>
+                    <span class="text-slate-700">|</span>
+                    <a href="/api/plan/export" download class="text-emerald-400 hover:text-emerald-300 underline text-xs flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        <span>Export Plan (CSV)</span>
+                    </a>
                 </div>
                 <!-- Action Buttons with Contextual Disabled State -->
                 <div class="flex flex-wrap items-center gap-2">
@@ -778,7 +837,7 @@
                 <div class="bg-slate-950/60 px-4 py-1.5 border-b border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
                     <span class="flex items-center gap-1.5">
                         <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-                        <span>Scroll horizontally to view all columns: AD Status, Last Activity, Planned Actions, Undo</span>
+                        <span>Click column headers to sort (ASC / DESC). Scroll horizontally to view all columns.</span>
                     </span>
                     <span class="font-mono text-slate-500">10 columns</span>
                 </div>
@@ -789,14 +848,54 @@
                                 <th class="py-3 px-3 w-8">
                                     <input type="checkbox" id="chk-header" onchange="toggleSelectAllHeader(this)" class="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0">
                                 </th>
-                                <th class="py-3 px-3">User Email / ID</th>
-                                <th class="py-3 px-3">Name</th>
-                                <th class="py-3 px-3">Role</th>
-                                <th class="py-3 px-3">Secondary ID</th>
-                                <th class="py-3 px-3">CloudSOC</th>
-                                <th class="py-3 px-3">Active Directory</th>
-                                <th class="py-3 px-3">Last Activity</th>
-                                <th class="py-3 px-3">Planned Action</th>
+                                <th onclick="toggleSort('email')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>User Email / ID</span>
+                                        <span id="sort-icon-email" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
+                                <th onclick="toggleSort('name')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>Name</span>
+                                        <span id="sort-icon-name" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
+                                <th onclick="toggleSort('role')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>Role</span>
+                                        <span id="sort-icon-role" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
+                                <th onclick="toggleSort('secondary_user_id')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>Secondary ID</span>
+                                        <span id="sort-icon-secondary_user_id" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
+                                <th onclick="toggleSort('is_active')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>CloudSOC</span>
+                                        <span id="sort-icon-is_active" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
+                                <th onclick="toggleSort('ad_status')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>Active Directory</span>
+                                        <span id="sort-icon-ad_status" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
+                                <th onclick="toggleSort('last_activity_date')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>Last Activity</span>
+                                        <span id="sort-icon-last_activity_date" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
+                                <th onclick="toggleSort('selected_action')" class="py-3 px-3 cursor-pointer hover:text-white transition select-none group">
+                                    <div class="flex items-center gap-1">
+                                        <span>Planned Action</span>
+                                        <span id="sort-icon-selected_action" class="text-slate-600 group-hover:text-slate-300">↕</span>
+                                    </div>
+                                </th>
                                 <th class="py-3 px-3">Actions</th>
                             </tr>
                         </thead>
